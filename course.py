@@ -15,7 +15,10 @@ UNITS = [
     {"title": "Bell states and teleportation", "about": "Four entangled states, and moving a qubit's state"},
 ]
 for number, unit in enumerate(UNITS, start=1):              # each lesson says which unit it belongs to
-    unit["lessons"] = [n for n, lesson in enumerate(LESSONS, start=1) if lesson["unit"] == number]
+    unit["lessons"] = []
+    for n, lesson in enumerate(LESSONS, start=1):
+        if lesson["unit"] == number:
+            unit["lessons"].append(n)
 
 TOTAL_LESSONS = len(LESSONS)
 MINUTES_PER_LESSON = 10
@@ -65,11 +68,16 @@ def new_quiz(kind, number=None):
         questions = [(number, question) for question in LESSONS[number - 1]["quiz"]]
     elif kind == "unit":
         title = f"Unit {number} test · {UNITS[number - 1]['title']}"
-        questions = [(n, question) for n in UNITS[number - 1]["lessons"] for question in LESSONS[n - 1]["quiz"]]
-        questions = random.sample(questions, min(len(questions), TEST_QUESTIONS))
+        questions = []
+        for n in UNITS[number - 1]["lessons"]:                  # every quiz question in the unit...
+            for question in LESSONS[n - 1]["quiz"]:
+                questions.append((n, question))
+        questions = random.sample(questions, min(len(questions), TEST_QUESTIONS))   # ...then pick some at random
     else:
         title = f"Final test · All {len(UNITS)} units"
-        questions = [(n, random.choice(LESSONS[n - 1]["quiz"]))           # a few lessons from every unit
-                     for unit in UNITS for n in sorted(random.sample(unit["lessons"], FINAL_PER_UNIT))]
+        questions = []
+        for unit in UNITS:                                          # a few random lessons from every unit,
+            for n in sorted(random.sample(unit["lessons"], FINAL_PER_UNIT)):
+                questions.append((n, random.choice(LESSONS[n - 1]["quiz"])))   # one question from each
     return {"id": int(time.time() * 1000), "kind": kind, "number": number, "title": title, "questions": questions,
             "index": 0, "results": [], "xp": 0, "started": time.time()}

@@ -22,8 +22,15 @@ def open_test(kind, unit=None):
 user = st.session_state.user
 done = user["lessons_done"]
 kind, number = next_step(user)
-current_unit = number if kind == "test" else unit_of(number) if kind == "lesson" else None
-open_units = st.session_state.setdefault("open_units", set())
+if kind == "test":
+    current_unit = number
+elif kind == "lesson":
+    current_unit = unit_of(number)
+else:
+    current_unit = None                                     # the final test, or all done
+if "open_units" not in st.session_state:
+    st.session_state.open_units = set()
+open_units = st.session_state.open_units
 if st.session_state.get("last_unit") != current_unit:      # a new unit opens by itself
     open_units.add(current_unit)
     st.session_state.last_unit = current_unit
@@ -74,7 +81,10 @@ with left:
     # ---------- the units ----------
     for unit_number, unit in enumerate(course.UNITS, start=1):
         lessons = unit["lessons"]
-        done_here = sum(1 for n in lessons if n <= done)
+        done_here = 0
+        for n in lessons:
+            if n <= done:
+                done_here += 1
         if unit_number in user["tests"]:
             status, tag = "complete", "done"
         elif unit_number == current_unit:
@@ -88,7 +98,10 @@ with left:
             with st.container(horizontal=True, vertical_alignment="center"):
                 st.html(parts.unit_text(unit_number, unit, done_here, status))
                 if st.button("", icon=":material/expand_less:" if is_open else ":material/expand_more:", key=f"open_{unit_number}"):
-                    open_units.symmetric_difference_update({unit_number})
+                    if unit_number in open_units:          # open it if it's closed, close it if it's open
+                        open_units.remove(unit_number)
+                    else:
+                        open_units.add(unit_number)
                     st.rerun()
             if status == "current":
                 st.html(parts.unit_bar(done_here, len(lessons)))
@@ -131,7 +144,12 @@ with left:
         st.html('<div style="height:22px"></div>')
 
     # ---------- the final test ----------
-    final_status = "done" if "final" in user["tests"] else "now" if kind == "final" else "locked"
+    if "final" in user["tests"]:
+        final_status = "done"
+    elif kind == "final":
+        final_status = "now"
+    else:
+        final_status = "locked"
     st.html(parts.final_test_card(final_status))
     if final_status != "locked" and st.button("Take the final test", key="final_test", icon=":material/flag:"):
         open_test("final")

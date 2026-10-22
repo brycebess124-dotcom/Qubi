@@ -48,14 +48,20 @@ for column, card in zip(st.columns(4), cards):
 
 # ---------------- achievements: each goal you reach moves one up a level ----------------
 badges = achievements(user)
-levels_done = sum(badge["reached"] for badge in badges)
+levels_done = 0
+levels_total = 0
+rows = ""
+for badge in badges:
+    levels_done += badge["reached"]
+    levels_total += len(badge["goals"])
+    rows += achievement_row(badge)
 heading("Achievements")
 st.html(f'''
 <div class="card" style="gap:0; padding-top:6px; padding-bottom:4px">
     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); column-gap:36px">
-        {"".join(achievement_row(badge) for badge in badges)}
+        {rows}
     </div>
-    <span class="small" style="padding:14px 0 10px">{levels_done} of {sum(len(badge["goals"]) for badge in badges)}
+    <span class="small" style="padding:14px 0 10px">{levels_done} of {levels_total}
         levels done. New ones show up after your lessons and tests.</span>
 </div>''')
 
@@ -84,7 +90,10 @@ with week_side:
 with units_side:
     rows = ""
     for number, unit in enumerate(course.UNITS, start=1):
-        done_here = sum(1 for n in unit["lessons"] if n <= lessons_done)
+        done_here = 0
+        for n in unit["lessons"]:
+            if n <= lessons_done:
+                done_here += 1
         percent = round(done_here / len(unit["lessons"]) * 100)
         if number in user["tests"]:
             note, note_color = f'{done_here} of {len(unit["lessons"])} lessons · test {user["tests"][number]}%', "var(--muted)"

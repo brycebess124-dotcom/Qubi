@@ -34,8 +34,12 @@ class State:
     # ---------- tidy up ----------
 
     def tidy(self):
-        # opposites cancel
-        self.entries = {colors: sign for colors, sign in self.entries.items() if sign != 0}
+        # opposites cancel: drop every entry whose sign added up to 0
+        new_entries = {}
+        for colors, sign in self.entries.items():
+            if sign != 0:
+                new_entries[colors] = sign
+        self.entries = new_entries
         if not self.entries:
             return self
         # shrink duplicates
@@ -77,14 +81,19 @@ class State:
         def gate(colors):
             white = colors.copy(); white[p] = 0
             black = colors.copy(); black[p] = 1
-            black_sign = -1 if colors[p] == 1 else 1        # black in -> minus on black
+            if colors[p] == 1:                              # black in -> minus on black
+                black_sign = -1
+            else:
+                black_sign = 1
             return [(white, 1), (black, black_sign)]
         return self.run_gate(gate)
 
     def Z(self, shape):
         p = self.spot(shape)
         def gate(colors):
-            return [(colors, -1 if colors[p] == 1 else 1)]  # minus if black
+            if colors[p] == 1:                              # minus if black
+                return [(colors, -1)]
+            return [(colors, 1)]
         return self.run_gate(gate)
 
     def CNOT(self, control, target):
@@ -98,8 +107,9 @@ class State:
     def CZ(self, shape1, shape2):
         a, b = self.spot(shape1), self.spot(shape2)
         def gate(colors):
-            both_black = colors[a] == 1 and colors[b] == 1
-            return [(colors, -1 if both_black else 1)]
+            if colors[a] == 1 and colors[b] == 1:           # minus if both are black
+                return [(colors, -1)]
+            return [(colors, 1)]
         return self.run_gate(gate)
 
     def SWAP(self, shape1, shape2):
@@ -127,31 +137,54 @@ class State:
 
     def chances(self):
         """Chance of each entry: sign squared, out of the total."""
-        total = sum(sign * sign for sign in self.entries.values())
-        return {colors: sign * sign / total for colors, sign in self.entries.items()}
+        total = 0
+        for sign in self.entries.values():
+            total += sign * sign
+        chances = {}
+        for colors, sign in self.entries.items():
+            chances[colors] = sign * sign / total
+        return chances
+
+    def seen_colors(self, colors, spots):
+        """Just the colors at these spots, like (1, 0) for a black circle and a white square."""
+        seen = []
+        for p in spots:
+            seen.append(colors[p])
+        return tuple(seen)
 
     def outcomes(self, shapes=None):
         """Every possible result of measuring these shapes (all if none given), as a list of
         (colors seen, chance, the state that's left). Only the entries that match what was seen are kept."""
-        shapes = shapes or self.shapes
-        spots = [self.spot(shape) for shape in shapes]
+        if not shapes:
+            shapes = self.shapes
+        spots = []
+        for shape in shapes:
+            spots.append(self.spot(shape))
         chances = {}
         for colors, chance in self.chances().items():
-            seen = tuple(colors[p] for p in spots)
+            seen = self.seen_colors(colors, spots)
             chances[seen] = chances.get(seen, 0) + chance
         results = []
         for seen, chance in sorted(chances.items()):
-            kept = {colors: sign for colors, sign in self.entries.items() if tuple(colors[p] for p in spots) == seen}
+            kept = {}                                   # only the entries that match what was seen
+            for colors, sign in self.entries.items():
+                if self.seen_colors(colors, spots) == seen:
+                    kept[colors] = sign
             results.append((seen, chance, State(self.shapes, kept).tidy()))
         return results
 
     def measure(self, shapes=None):
         """Measures some shapes (all if none given) for real: picks one result at random, keeps only the
         entries that match it, and returns what was seen, like {"circle": 1}."""
-        shapes = shapes or self.shapes
+        if not shapes:
+            shapes = self.shapes
         results = self.outcomes(shapes)
-        seen, _, left = random.choices(results, [chance for _, chance, _ in results])[0]
-        self.entries = left.entries
+        weights = []                       # each result's chance, so likelier results get picked more often
+        for result in results:
+            weights.append(result[1])
+        picked = random.choices(results, weights)[0]
+        seen = picked[0]
+        self.entries = picked[2].entries
         return dict(zip(shapes, seen))
 
     # ---------- entanglement ----------
@@ -161,8 +194,10 @@ class State:
         for p in range(len(self.shapes)):
             pairs = {}
             for colors, sign in self.entries.items():
-                others = colors[:p] + colors[p + 1:]
-                pairs.setdefault(others, [0, 0])[colors[p]] += sign
+                others = colors[:p] + colors[p + 1:]          # the colors of every other shape
+                if others not in pairs:
+                    pairs[others] = [0, 0]
+                pairs[others][colors[p]] += sign
             first = list(pairs.values())[0]
             for pair in pairs.values():
                 if first[0] * pair[1] != first[1] * pair[0]:
@@ -172,15 +207,32 @@ class State:
 
 # ================= helpers for writing lessons =================
 
+def to_colors(entry):
+    """Letters to numbers: "wb" or "-wb" -> (0, 1). w = white = 0, b = black = 1."""
+    colors = []
+    for letter in entry.lstrip("-"):
+        if letter == "w":
+            colors.append(0)
+        else:
+            colors.append(1)
+    return tuple(colors)
+
+
+def to_sign(entry):
+    """-1 if the entry starts with a minus, otherwise 1."""
+    if entry.startswith("-"):
+        return -1
+    return 1
+
+
 def make(shapes, *entries):
     """make("circle", "w")              -> a white circle
        make("circle square", "wb")      -> white circle, black square
        make("circle", "w", "-b")        -> a superposition: white circle | minus black circle"""
     table = {}
     for entry in entries:
-        sign = -1 if entry.startswith("-") else 1
-        colors = tuple(0 if letter == "w" else 1 for letter in entry.lstrip("-"))
-        table[colors] = table.get(colors, 0) + sign
+        colors = to_colors(entry)
+        table[colors] = table.get(colors, 0) + to_sign(entry)
     return State(shapes.split(), table)
 
 
@@ -188,8 +240,9 @@ def untidy(shapes, *entries):
     """A messy superposition for pictures only: entries keep their order and can repeat or cancel,
     like before tidying."""
     state = State(shapes.split(), {})
-    state.entries = [(tuple(0 if letter == "w" else 1 for letter in entry.lstrip("-")),
-                      -1 if entry.startswith("-") else 1) for entry in entries]
+    state.entries = []
+    for entry in entries:
+        state.entries.append((to_colors(entry), to_sign(entry)))
     return state
 
 
@@ -199,8 +252,24 @@ def apply(state, gate):
     if isinstance(gate, tuple):
         label, function = gate
         return function(state.copy())
-    name, *on = gate.split()
-    return getattr(state.copy(), name)(*on)
+    words = gate.split()                   # like ["CNOT", "circle", "square"]
+    name, on = words[0], words[1:]
+    state = state.copy()
+    if name == "NOT":
+        return state.NOT(on[0])
+    if name == "H":
+        return state.H(on[0])
+    if name == "Z":
+        return state.Z(on[0])
+    if name == "CNOT":
+        return state.CNOT(on[0], on[1])
+    if name == "CZ":
+        return state.CZ(on[0], on[1])
+    if name == "SWAP":
+        return state.SWAP(on[0], on[1])
+    if name == "TOFFOLI":
+        return state.TOFFOLI(on[0], on[1], on[2])
+    raise ValueError(f"Unknown gate: {name}")
 
 
 def run(state, *gates):
@@ -208,10 +277,18 @@ def run(state, *gates):
     End with "measure" to show every result and its chance, or "measure square" to measure only some shapes."""
     items = [state]
     for gate in gates:
-        if isinstance(gate, str) and gate.split()[0] == "measure":
-            shapes = gate.split()[1:]
-            items += [" ".join(["MEASURE", *shapes]), {"outcomes": state.outcomes(shapes)}]
+        if isinstance(gate, tuple):                    # a game box: (label, function)
+            state = apply(state, gate)
+            items.append(gate[0])
+            items.append(state)
+            continue
+        words = gate.split()
+        if words[0] == "measure":
+            shapes = words[1:]
+            items.append("MEASURE " + " ".join(shapes))
+            items.append({"outcomes": state.outcomes(shapes)})
         else:
             state = apply(state, gate)
-            items += [gate[0] if isinstance(gate, tuple) else gate, state]      # "CNOT circle square" labels the wires
+            items.append(gate)                         # "CNOT circle square" labels the wires
+            items.append(state)
     return items

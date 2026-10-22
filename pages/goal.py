@@ -7,7 +7,9 @@ from engine.progress import lessons_date, finish_date, finish_line, short_date, 
 
 user = st.session_state.user
 from_sign_up = st.session_state.get("goal_from") == "sign up"
-pace = st.session_state.setdefault("pace", user["daily_goal"])
+if "pace" not in st.session_state:
+    st.session_state.pace = user["daily_goal"]
+pace = st.session_state.pace
 
 # ---------------- top ----------------
 with st.container(horizontal=True, vertical_alignment="center"):
@@ -55,7 +57,10 @@ with right:
     rows = ""
     lessons_so_far = 0
     for number, unit in enumerate(course.UNITS, start=1):
-        left_in_unit = sum(1 for n in unit["lessons"] if n > user["lessons_done"])
+        left_in_unit = 0
+        for n in unit["lessons"]:
+            if n > user["lessons_done"]:
+                left_in_unit += 1
         lessons_so_far += left_in_unit
         if left_in_unit == 0:
             when, shade = "DONE", PURPLE

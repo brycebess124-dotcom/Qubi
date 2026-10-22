@@ -35,7 +35,9 @@ def next_step():
 
 def try_it(spec):
     """The Measure / Play button: measures for real and shows the results."""
-    rounds = st.session_state.setdefault("rounds", [])
+    if "rounds" not in st.session_state:
+        st.session_state.rounds = []
+    rounds = st.session_state.rounds
     with st.container(key="card_tryit"):
         if st.button(spec["button"], icon=":material/play_arrow:", key="try_button"):
             name = random.choice(list(spec["states"]))              # games hide one of several states
@@ -46,7 +48,7 @@ def try_it(spec):
         if not rounds:
             st.html('<span class="small">Press the button to try it for real.</span>')
             return
-        state = next(iter(spec["states"].values()))
+        state = list(spec["states"].values())[0]
         shapes = spec["shapes"] or state.shapes
         if spec["times"] == 1:                                         # a game: show the last round
             name, seen = rounds[-1]
@@ -110,8 +112,12 @@ next_label = "Start the quiz" if last_step else "Continue"
 if step["ask"] and picked is not None:
     correct = picked == step["ask"]["answer"]
     first_try = st.session_state.get("tries", 1) == 1
-    title = (f"Correct! +{course.CHECK_IN_XP} XP" if first_try else "Correct!") if correct else "Not quite"
-    text = step["ask"]["why"] if correct else "Have another look at the picture, then try again."
+    if correct and first_try:
+        title, text = f"Correct! +{course.CHECK_IN_XP} XP", step["ask"]["why"]
+    elif correct:
+        title, text = "Correct!", step["ask"]["why"]
+    else:
+        title, text = "Not quite", "Have another look at the picture, then try again."
     with feedback(correct, title, text):
         if correct:
             if st.button(next_label, type="primary", icon=":material/arrow_forward:", icon_position="right"):

@@ -1,6 +1,5 @@
 # Circuit Lab: build any circuit, step through it, measure it, and export it to IBM.
 
-import collections
 import streamlit as st
 from engine.qubits import State, apply, SHAPES
 from engine.qasm import to_qasm, ibm_label, COMPOSER
@@ -11,9 +10,18 @@ PEGS = {"NOT": 1, "H": 1, "Z": 1, "CNOT": 2, "CZ": 2, "SWAP": 2, "TOFFOLI": 3}
 PEG_NAMES = {1: ["On"], 2: ["Control", "Target"], 3: ["Control 1", "Control 2", "Target"]}
 MAX_SHAPES = 3
 
-lab = st.session_state.setdefault("lab", {"name": "Bell pair", "shapes": ["circle", "square"], "starts": [0, 0],
-                                          "steps": [("H", ["circle"]), ("CNOT", ["circle", "square"])],
-                                          "show": None, "counts": None})
+if "lab" not in st.session_state:          # the circuit you start with: a Bell pair
+    st.session_state.lab = {"name": "Bell pair", "shapes": ["circle", "square"], "starts": [0, 0],
+                            "steps": [("H", ["circle"]), ("CNOT", ["circle", "square"])],
+                            "show": None, "counts": None}
+lab = st.session_state.lab
+
+
+def box_label(box):
+    """How a box's name is shown on its button."""
+    if box == "TOFFOLI":
+        return "Toffoli"
+    return box
 
 
 def state_after(count):
@@ -89,7 +97,11 @@ with st.container(horizontal=True, vertical_alignment="center"):
 shown = len(lab["steps"]) if lab["show"] is None else lab["show"]
 state = state_after(shown)
 if measure:
-    lab["counts"] = collections.Counter(tuple(state.copy().measure().values()) for _ in range(100))
+    counts = {}                            # how many times each result came up
+    for _ in range(100):
+        seen = tuple(state.copy().measure().values())
+        counts[seen] = counts.get(seen, 0) + 1
+    lab["counts"] = counts
 
 build, output = st.columns([1.7, 1], gap="large")
 
@@ -113,20 +125,28 @@ with build:
             if len(lab["shapes"]) > 1 and st.button("Remove shape", icon=":material/remove:"):
                 gone = lab["shapes"].pop()
                 lab["starts"].pop()
-                lab["steps"] = [(name, on) for name, on in lab["steps"] if gone not in on]
+                still_fit = []                  # drop the boxes that were on the removed shape
+                for name, on in lab["steps"]:
+                    if gone not in on:
+                        still_fit.append((name, on))
+                lab["steps"] = still_fit
                 changed()
                 st.rerun()
 
     # pick a box and the shapes it goes on
     with st.container(key="card_boxes"):
         st.html('<span class="label">ADD A BOX</span>')
-        usable = [name for name, pegs in PEGS.items() if pegs <= len(lab["shapes"])]
+        usable = []                             # boxes with no more pegs than there are shapes
+        for box, pegs in PEGS.items():
+            if pegs <= len(lab["shapes"]):
+                usable.append(box)
         name = st.segmented_control("Box", usable, default="H", required=True, key="box_choice",
-                                    format_func=lambda box: "Toffoli" if box == "TOFFOLI" else box,
+                                    format_func=box_label,
                                     label_visibility="collapsed")
         with st.container(horizontal=True, vertical_alignment="bottom"):
-            on = [st.selectbox(peg, lab["shapes"], index=i % len(lab["shapes"]), key=f"peg_{name}_{i}")
-                  for i, peg in enumerate(PEG_NAMES[PEGS[name]])]
+            on = []                             # one dropdown per peg: which shape it goes on
+            for i, peg in enumerate(PEG_NAMES[PEGS[name]]):
+                on.append(st.selectbox(peg, lab["shapes"], index=i % len(lab["shapes"]), key=f"peg_{name}_{i}"))
             if st.button("Add", type="primary", icon=":material/add:", disabled=len(set(on)) < len(on)):
                 lab["steps"].append((name, on))
                 changed()
@@ -156,7 +176,7 @@ with output:
     counts = ""
     if lab["counts"]:
         counts = "".join(f'<span class="row" style="gap:6px">{as_image(draw_colors(lab["shapes"], colors, 12))} {count}</span>'
-                         for colors, count in lab["counts"].most_common())
+                         for colors, count in sorted(lab["counts"].items()))
         counts = (f'<div class="row" style="justify-content:space-between; gap:10px; padding:12px 14px; border-radius:14px; '
                   f'background:#FFFFFF; border:1px solid rgba(24,24,27,0.08); flex-wrap:wrap">'
                   f'<span style="color:#3F3F46; font-size:14px">Last 100 measurements</span>'

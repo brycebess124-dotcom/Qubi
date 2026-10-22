@@ -22,7 +22,10 @@ key = f"q{quiz['id']}_{index}"                       # keeps every question's bo
 checked = st.session_state.get("checked")            # set once this question's answer has been checked
 if checked and checked["key"] != key:
     checked = None
-target = [(gate.split()[0], gate.split()[1:]) for gate in question.get("target", [])]   # circuit questions
+target = []                                          # circuit questions: the boxes the answer must match
+for gate in question.get("target", []):
+    pieces = gate.split()                            # like ["CNOT", "circle", "square"]
+    target.append((pieces[0], pieces[1:]))
 
 ROLES = {"NOT": ["On"], "H": ["On"], "Z": ["On"], "CNOT": ["Control", "Target"], "CZ": ["Control", "Target"],
          "SWAP": ["Swap", "With"], "TOFFOLI": ["Control", "Control", "Target"]}     # what each peg of a gate is for
@@ -62,13 +65,19 @@ def next_question():
     if index + 1 < total:
         quiz["index"] += 1
         st.rerun()
-    right = sum(result["correct"] for result in quiz["results"])
+    right = 0
+    for result in quiz["results"]:
+        if result["correct"]:
+            right += 1
     if quiz["kind"] == "lesson":
         finish_lesson(user, quiz["number"])
         st.session_state.completed = {"lesson": quiz["number"], "xp": quiz["xp"] + course.LESSON_XP,
                                       "badges": new_badges(user)}
         st.switch_page("pages/streak.py")
-    unit = quiz["number"] if quiz["kind"] == "unit" else "final"
+    if quiz["kind"] == "unit":
+        unit = quiz["number"]
+    else:
+        unit = "final"
     percent = finish_test(user, unit, right, total)
     st.session_state.test_result = {"kind": quiz["kind"], "unit": unit, "title": quiz["title"], "right": right,
                                     "total": total, "percent": percent, "results": quiz["results"],
@@ -81,7 +90,9 @@ def next_question():
 def state_builder():
     """Rows of entries: a sign, then a color for each shape. Returns the built state."""
     shapes = question["answer"].shapes
-    ids = st.session_state.setdefault(f"{key}_entries", [0])
+    if f"{key}_entries" not in st.session_state:
+        st.session_state[f"{key}_entries"] = [0]
+    ids = st.session_state[f"{key}_entries"]
     columns = "".join(f'<span>{shape.upper()}</span>' for shape in shapes)
     st.html(f'<div class="label" style="display:grid; grid-template-columns:96px repeat({len(shapes)}, 1fr) 44px; '
             f'gap:12px; padding:0 14px"><span>SIGN</span>{columns}<span></span></div>')
@@ -90,19 +101,35 @@ def state_builder():
         with st.container(key=f"entry_{key}_{entry}", horizontal=True, vertical_alignment="center"):
             sign = st.segmented_control("Sign", ["+", "−"], default="+", required=True,
                                         key=f"{key}_sign_{entry}", label_visibility="collapsed")
-            colors = tuple(["White", "Black"].index(st.selectbox(shape, ["White", "Black"], key=f"{key}_{shape}_{entry}",
-                                                                  label_visibility="collapsed")) for shape in shapes)
+            colors = []                         # 0 for white, 1 for black, one per shape
+            for shape in shapes:
+                color = st.selectbox(shape, ["White", "Black"], key=f"{key}_{shape}_{entry}",
+                                     label_visibility="collapsed")
+                if color == "White":
+                    colors.append(0)
+                else:
+                    colors.append(1)
+            colors = tuple(colors)
             if st.button("", icon=":material/delete:", key=f"{key}_delete_{entry}", type="tertiary", disabled=len(ids) == 1):
                 ids.remove(entry)
                 st.rerun()
-        entries[colors] = entries.get(colors, 0) + (1 if sign == "+" else -1)
+        if sign == "+":
+            entries[colors] = entries.get(colors, 0) + 1
+        else:
+            entries[colors] = entries.get(colors, 0) - 1
     if st.button("Add entry", icon=":material/add:", key=f"{key}_add", width="stretch"):
         ids.append(max(ids) + 1)
         st.rerun()
 
-    built = State(shapes, {colors: sign for colors, sign in entries.items() if sign != 0})
-    cloud_note = ("On: 2 or more entries make a superposition." if built.is_superposition()
-                  else "Turns on by itself when you have 2 or more entries.")
+    kept = {}                                        # drop entries that cancelled out (sign 0)
+    for colors, sign in entries.items():
+        if sign != 0:
+            kept[colors] = sign
+    built = State(shapes, kept)
+    if built.is_superposition():
+        cloud_note = "On: 2 or more entries make a superposition."
+    else:
+        cloud_note = "Turns on by itself when you have 2 or more entries."
     st.html(f'<div class="card" style="background:var(--well); padding:14px 16px; gap:2px">'
             f'<span class="strong" style="font-weight:600">Superposition (the cloud)</span><span class="small">{cloud_note}</span></div>')
     st.html('<span class="label">PREVIEW</span>')
@@ -116,18 +143,26 @@ def state_builder():
 def circuit_builder():
     """Rows of boxes: which box, and which shapes it goes on. Returns the gates and whether they're all valid."""
     shapes = question["inputs"][0].shapes
-    allowed = [name for name in question["allowed"] if len(ROLES[name]) <= len(shapes)]
+    allowed = []                                     # boxes with no more pegs than there are shapes
+    for name in question["allowed"]:
+        if len(ROLES[name]) <= len(shapes):
+            allowed.append(name)
     chips = "".join(f'<span class="chip" style="height:34px; font-size:14px">{name}</span>' for name in allowed)
     st.html(f'<div class="row" style="gap:8px; flex-wrap:wrap"><span class="label">ALLOWED</span>{chips}</div>')
-    ids = st.session_state.setdefault(f"{key}_gates", [])
+    if f"{key}_gates" not in st.session_state:
+        st.session_state[f"{key}_gates"] = []
+    ids = st.session_state[f"{key}_gates"]
     gates, valid = [], True
     for row, gate in enumerate(ids, start=1):
         with st.container(key=f"gate_row_{key}_{gate}", horizontal=True, vertical_alignment="center"):
             st.html(f'<span class="label" style="font-size:14px">{row}</span>', width="content")
             name = st.selectbox("Box", allowed, key=f"{key}_box_{gate}", label_visibility="collapsed")
-            on = [st.selectbox(f"{role} {peg + 1}", shapes, index=min(peg, len(shapes) - 1), key=f"{key}_on_{gate}_{name}_{peg}",
-                               format_func=lambda shape, role=role: f"{role}: {shape}", label_visibility="collapsed")
-                  for peg, role in enumerate(ROLES[name])]
+            on = []                                 # which shape goes on each peg, like Control: circle
+            for peg, role in enumerate(ROLES[name]):
+                labels = [f"{role}: {shape}" for shape in shapes]
+                picked = st.selectbox(f"{role} {peg + 1}", labels, index=min(peg, len(shapes) - 1),
+                                      key=f"{key}_on_{gate}_{name}_{peg}", label_visibility="collapsed")
+                on.append(picked.split(": ")[1])
             if st.button("", icon=":material/delete:", key=f"{key}_delete_{gate}", type="tertiary"):
                 ids.remove(gate)
                 st.rerun()
@@ -143,7 +178,10 @@ def circuit_builder():
     st.html('<span class="label">TEST RUNS</span>')
     for start in question["inputs"]:
         expected = run_gates(start, target)
-        output = run_gates(start, gates) if valid else start
+        if valid:
+            output = run_gates(start, gates)
+        else:
+            output = start
         match = valid and output == expected
         mark = "✓ Matches" if match else "✗ Doesn't match yet"
         st.html(f'<div class="row" style="gap:12px; flex-wrap:wrap">{picture([start, output], across=True)}'
@@ -208,5 +246,8 @@ else:
         if question["type"] == "state" and st.button("Check answer", type="primary"):
             check(bool(built.entries) and built == question["answer"], words(built))
         if question["type"] == "circuit" and st.button("Check answer", type="primary"):
-            outputs_match = valid and all(run_gates(start, gates) == run_gates(start, target) for start in question["inputs"])
+            outputs_match = valid
+            for start in question["inputs"]:          # every test run has to match
+                if run_gates(start, gates) != run_gates(start, target):
+                    outputs_match = False
             check(outputs_match, ", ".join(f"{name} {' '.join(on)}" for name, on in gates) or "no boxes")

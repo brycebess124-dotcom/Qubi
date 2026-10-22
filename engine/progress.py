@@ -21,7 +21,12 @@ def monday():
 def new_user(name, last_name, email, sample=False):
     """A fresh account. sample=True fills in sample progress (used by the tests).
     Names are escaped because they're shown inside HTML."""
-    username = "".join(letter for letter in name + last_name if letter.isalnum()) or email.split("@")[0]
+    username = ""                              # the name with spaces and symbols taken out
+    for letter in name + last_name:
+        if letter.isalnum():
+            username += letter
+    if username == "":
+        username = email.split("@")[0]
     user = {"name": escape(name), "last_name": escape(last_name), "username": escape(username), "email": escape(email),
             "joined": today().strftime("%B %Y"), "last_day": None, "week_of": monday(),
             "lessons_done": 0, "tests": {}, "xp": 0, "xp_week": [0] * 7,
@@ -32,7 +37,9 @@ def new_user(name, last_name, email, sample=False):
         user["tests"] = dict(course.SAMPLE_PROGRESS["tests"])
         user["xp_week"] = list(course.SAMPLE_PROGRESS["xp_week"])
         user["last_day"] = (today() - datetime.timedelta(days=1)).isoformat()     # a streak that's still alive
-    user["badges"] = {badge["name"]: badge["reached"] for badge in achievements(user)}   # already earned, so no pop-ups
+    user["badges"] = {}                        # already earned, so no pop-ups
+    for badge in achievements(user):
+        user["badges"][badge["name"]] = badge["reached"]
     return user
 
 
@@ -104,36 +111,64 @@ def achievements(user):
     """Every achievement from course.ACHIEVEMENTS, with how far along it is:
     reached = goals reached so far, level = the level being worked on (the last one once all are done),
     have / goal = progress toward the next goal, and text = what to do, like "Finish 10 lessons"."""
-    unit_tests = {unit: score for unit, score in user["tests"].items() if unit != "final"}
+    unit_tests = 0
+    perfect_tests = 0
+    for unit, score in user["tests"].items():
+        if unit != "final":
+            unit_tests += 1
+            if score == 100:
+                perfect_tests += 1
+    if "final" in user["tests"]:
+        final_test = 1
+    else:
+        final_test = 0
     counts = {"best streak": user["best_streak"], "xp": user["xp"], "lessons": user["lessons_done"],
-              "unit tests": len(unit_tests), "right answers": user["right"],
-              "perfect tests": len([score for score in unit_tests.values() if score == 100]),
-              "final test": int("final" in user["tests"])}
+              "unit tests": unit_tests, "right answers": user["right"],
+              "perfect tests": perfect_tests, "final test": final_test}
     result = []
     for badge in course.ACHIEVEMENTS:
         goals = badge["goals"]
         have = counts[badge["counts"]]
-        reached = len([goal for goal in goals if have >= goal])
+        reached = 0                        # how many goals are done
+        for goal in goals:
+            if have >= goal:
+                reached += 1
         goal = goals[min(reached, len(goals) - 1)]
-        result.append({**badge, "reached": reached, "done": reached == len(goals), "level": min(reached + 1, len(goals)),
-                       "have": min(have, goal), "goal": goal, "text": task(badge, goal)})
+        info = badge.copy()                # the badge from course.py, plus how far along it is
+        info["reached"] = reached
+        info["done"] = reached == len(goals)
+        info["level"] = min(reached + 1, len(goals))
+        info["have"] = min(have, goal)
+        info["goal"] = goal
+        info["text"] = task(badge, goal)
+        result.append(info)
     return result
 
 
 def task(badge, goal):
     """What to do to reach a goal, like "Reach a 7 day streak" or "Finish 1 lesson"."""
     noun = badge.get("noun")
-    return badge["task"].format(f"{goal} {noun if goal == 1 else noun + 's'}" if noun else goal)
+    if not noun:
+        amount = str(goal)
+    elif goal == 1:
+        amount = f"{goal} {noun}"
+    else:
+        amount = f"{goal} {noun}s"
+    return badge["task"].format(amount)
 
 
 def new_badges(user):
     """Achievement levels reached since the last check, each with the goal that was just reached.
     Remembers them, so each one is only shown once (after a lesson or a test)."""
-    seen = user.setdefault("badges", {})
+    if "badges" not in user:
+        user["badges"] = {}
+    seen = user["badges"]
     fresh = []
     for badge in achievements(user):
         if badge["reached"] > seen.get(badge["name"], 0):
-            fresh.append({**badge, "text": task(badge, badge["goals"][badge["reached"] - 1])})
+            new = badge.copy()
+            new["text"] = task(badge, badge["goals"][badge["reached"] - 1])   # the goal just reached
+            fresh.append(new)
         seen[badge["name"]] = badge["reached"]
     return fresh
 
@@ -157,16 +192,22 @@ def week(user):
     """Monday to Sunday: "done", "today" (not done yet), "missed" or "later"."""
     today_number = today().weekday()
     done_today = user["lessons_today"] > 0
-    earlier = user["streak"] - (1 if done_today else 0)       # streak days before today
+    earlier = user["streak"]                                  # streak days before today
+    if done_today:
+        earlier -= 1
     days = []
     for day in range(7):
         days_ago = today_number - day
         if days_ago < 0:
             days.append("later")
+        elif days_ago == 0 and done_today:
+            days.append("done")
         elif days_ago == 0:
-            days.append("done" if done_today else "today")
+            days.append("today")
+        elif days_ago <= earlier:
+            days.append("done")
         else:
-            days.append("done" if days_ago <= earlier else "missed")
+            days.append("missed")
     return days
 
 
@@ -180,12 +221,16 @@ def finish_date(user, daily_goal=None):
     lessons_left = course.TOTAL_LESSONS - user["lessons_done"]
     if lessons_left == 0:
         return today()
-    return lessons_date(lessons_left, daily_goal or user["daily_goal"]) + datetime.timedelta(days=1)
+    if not daily_goal:
+        daily_goal = user["daily_goal"]
+    return lessons_date(lessons_left, daily_goal) + datetime.timedelta(days=1)
 
 
 def finish_line(user, daily_goal=None):
     """The finish date as text, like OCT 31, or DONE once the final test is passed."""
-    return "DONE" if "final" in user["tests"] else short_date(finish_date(user, daily_goal))
+    if "final" in user["tests"]:
+        return "DONE"
+    return short_date(finish_date(user, daily_goal))
 
 
 def short_date(date):

@@ -12,7 +12,8 @@ result = st.session_state.test_result
 user = st.session_state.user
 passed = result["percent"] >= course.PASS_MARK
 unit = result["unit"]
-minutes, seconds = divmod(result["seconds"], 60)
+minutes = result["seconds"] // 60
+seconds = result["seconds"] % 60
 
 # ---------------- top bar ----------------
 with st.container(key="topbar", horizontal=True, vertical_alignment="center"):
@@ -87,7 +88,10 @@ with by_lesson:
     </div>''')
 
 with missed_side:
-    missed = [answer for answer in result["results"] if not answer["correct"]]
+    missed = []
+    for answer in result["results"]:
+        if not answer["correct"]:
+            missed.append(answer)
     if missed:
         first = missed[0]
         st.html(f'''

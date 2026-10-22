@@ -325,7 +325,8 @@ def draw_column(name, spots):
                        f'<path d="M{x - 9} {y + 5}A9 9 0 0 1 {x + 9} {y + 5}" fill="none" stroke="#F4F4F5" stroke-width="2"/>'
                        f'<path d="M{x} {y + 5}L{x + 5} {y - 3}" stroke="#F4F4F5" stroke-width="2" stroke-linecap="round"/>'
                        for x, y in spots)
-    xs, ys = [x for x, _ in spots], [y for _, y in spots]
+    xs = [spot[0] for spot in spots]
+    ys = [spot[1] for spot in spots]
     if name not in SLOTS:                                        # a game box like "?": one box over every spot
         left, top, right, bottom = min(xs) - 22, min(ys) - 20, max(xs) + 22, max(ys) + 20
         return (f'<rect x="{left}" y="{top}" width="{right - left}" height="{bottom - top}" rx="8" fill="#C4B5FD" stroke="#52525B"/>'
@@ -346,17 +347,36 @@ def draw_gate(item, shapes=None, small=False):
     its shape in the picture above. item is "H", "CNOT", or a box and its shapes like "CNOT circle square".
     shapes = every shape in the picture, so a box on only some of them lines up with the right ones.
     small=True (pictures that run left to right) skips the lining up and keeps the gate compact."""
-    name, *on = item.split()
-    if not all(shape in SHAPES for shape in on):                 # a game box label with spaces in it
-        name, on = item, []
+    words = item.split()
+    name, on = words[0], words[1:]
+    for shape in on:
+        if shape not in SHAPES:                                  # a game box label with spaces in it
+            name, on = item, []
+            break
     if name == "MEASURE" or name not in SLOTS:                   # every shape, unless it names some
-        on = on or shapes or ["one"]
+        if not on and shapes:
+            on = shapes
+        elif not on:
+            on = ["one"]
     elif not on:                                                 # a bare name: its shapes in order
-        on = shapes if shapes and len(shapes) == len(SLOTS[name]) else [str(i) for i in range(len(SLOTS[name]))]
-    row = shapes if shapes and not small and all(shape in shapes for shape in on) else on
+        if shapes and len(shapes) == len(SLOTS[name]):
+            on = shapes
+        else:
+            on = []
+            for i in range(len(SLOTS[name])):
+                on.append(str(i))
+    row = on                                                     # line up under the picture's shapes if we can
+    if shapes and not small:
+        row = shapes
+        for shape in on:
+            if shape not in shapes:
+                row = on
+                break
     step = SIZE + 6                                              # same spacing as shapes in a state
     width = step * (len(row) - 1) + 50
-    spots = [(25 + step * row.index(shape), 25) for shape in on]
+    spots = []
+    for shape in on:
+        spots.append((25 + step * row.index(shape), 25))
     return f'<svg {SVG} width="{width}" height="50">{draw_column(name, spots)}</svg>'
 
 
@@ -420,7 +440,11 @@ def draw_items(items, small=False):
 def picture(items, note="", across=False, arrows=True):
     """A paper card with the items in order, joined by arrows. across=True lays them out left to right.
     arrows=False just shows the items side by side."""
-    arrow = as_image(draw_arrow("right" if across else "down")) if arrows else ""
+    arrow = ""
+    if arrows and across:
+        arrow = as_image(draw_arrow("right"))
+    elif arrows:
+        arrow = as_image(draw_arrow("down"))
     drawn = draw_items(items, small=across)
     if not arrows and "=" in items:                              # keep each side of an = sign together
         sides, side = [], []
