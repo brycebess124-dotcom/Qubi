@@ -1,7 +1,10 @@
-# Pieces shared by the Lesson and Quiz pages: the top bar, answer options and the feedback bar.
+# Pieces shared by the Lesson and Quiz pages: the top bar, answer options, the feedback bar and the Rulebook.
 
 import streamlit as st
-from engine.parts import steps_bar, icon
+import course
+from lessons import LESSONS
+from rulebook import RULES
+from engine.parts import steps_bar, icon, GREY
 from engine.ui import picture, table_picture
 
 
@@ -18,6 +21,7 @@ def top_bar(title, counter, done, total, chip):
             </div>
             {steps_bar(done, total)}
         </div>''')
+        rulebook_button("rulebook_top")
         st.html(f'<span class="chip" style="height:40px">{chip}</span>', width="content")
 
 
@@ -65,3 +69,71 @@ def show_picture(spec, note=""):
         st.html(picture([spec], note))
     else:
         st.html(picture(spec, note))
+
+
+# ================= the Rulebook =================
+
+def count_rules(lessons_done):
+    """How many rules are unlocked after this many lessons."""
+    unlocked = 0
+    for number, rules in RULES.items():
+        if number <= lessons_done:
+            unlocked += len(rules)
+    return unlocked
+
+
+def rulebook_button(key, stretch=False):
+    """The button that opens the Rulebook. Used on the Learn page and in the top bar of lessons and quizzes."""
+    if stretch:
+        width = "stretch"
+    else:
+        width = "content"
+    if st.button("Rulebook", icon=":material/menu_book:", key=key, width=width):
+        rulebook()
+
+
+@st.dialog("Rulebook", width="large")
+def rulebook():
+    """Every rule learned so far, grouped by unit. Each lesson you finish unlocks its rules."""
+    done = st.session_state.user["lessons_done"]
+    total = 0
+    for rules in RULES.values():
+        total += len(rules)
+    st.html(f'<span class="small" style="font-size:15px">{count_rules(done)} of {total} rules unlocked. '
+            f'Finish a lesson to unlock its rules.</span>')
+    if done == 0:
+        st.html('<div class="card" style="gap:4px"><span class="title">Nothing here yet</span>'
+                '<span class="small">Finish Lesson 1 to unlock your first rule.</span></div>')
+        return
+
+    for unit_number, unit in enumerate(course.UNITS, start=1):
+        lessons = unit["lessons"]
+        if lessons[0] > done:                          # nothing unlocked in this unit yet
+            st.html(f'<div class="row" style="gap:10px; padding:12px 16px; border:1px solid var(--line); '
+                    f'border-radius:12px; opacity:0.6">{icon("lock", GREY, 16)}'
+                    f'<span class="small">Unit {unit_number} · {unit["title"]}</span></div>')
+            continue
+        have, here = 0, 0
+        for lesson in lessons:
+            here += len(RULES[lesson])
+            if lesson <= done:
+                have += len(RULES[lesson])
+        newest = done in lessons                      # open the unit with the newest rules
+        with st.expander(f"**Unit {unit_number} · {unit['title']}** · {have}/{here} rules", expanded=newest):
+            for lesson in lessons:
+                title = LESSONS[lesson - 1]["title"]
+                if lesson > done:
+                    st.html(f'<div class="row" style="gap:8px; opacity:0.6">{icon("lock", GREY, 14)}'
+                            f'<span class="small">Lesson {lesson} · {title}: finish it to unlock</span></div>')
+                    continue
+                tag = ""
+                if lesson == done:
+                    tag = ('<span class="label" style="color:#5B21B6; background:#EDE9FE; padding:3px 8px; '
+                           'border-radius:6px">NEW</span>')
+                st.html(f'<div class="row" style="gap:10px; margin-top:6px"><span class="label" style="color:var(--muted)">LESSON {lesson} · '
+                        f'{title.upper()}</span>{tag}</div>')
+                for rule in RULES[lesson]:
+                    st.html(f'<div class="stack" style="gap:4px"><span class="strong" style="font-size:17px; '
+                            f'font-weight:700">{rule["name"]}</span><span style="color:var(--text); font-size:15px; '
+                            f'line-height:1.5">{rule["text"]}</span></div>')
+                    show_picture(rule["picture"])

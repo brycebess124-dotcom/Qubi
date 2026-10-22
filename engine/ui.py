@@ -176,6 +176,8 @@ button[data-variant="segmented_control"] p { color: inherit; }
 [role="dialog"] { background: var(--card); color: var(--text); }
 [role="dialog"] h2, [role="dialog"] div:has(> h2) { color: var(--strong); }
 [role="dialog"] button[aria-label="Close"] { color: var(--muted); }
+[role="dialog"] [data-testid="stExpander"] summary, [role="dialog"] [data-testid="stExpander"] summary * { color: var(--strong); }
+[role="dialog"] [data-testid="stExpander"] details { border-color: var(--line); }
 [data-testid="stCode"] code { color: #C4C4CC; font-family: 'Space Mono', monospace !important; font-size: 13px; }
 """
 

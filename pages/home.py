@@ -5,6 +5,7 @@ import course
 from lessons import LESSONS
 from engine import parts
 from engine.progress import next_step, unit_of, level, week, finish_line
+from engine.widgets import rulebook_button
 
 
 def open_lesson(number):
@@ -157,6 +158,7 @@ with left:
 # ================= right: progress =================
 with right:
     st.html(parts.stat_chips(user["streak"], user["xp"]))
+    rulebook_button("rulebook_learn", stretch=True)
     st.html(parts.progress_card(done, course.TOTAL_LESSONS, level(user), user["xp"], level(user) * course.XP_PER_LEVEL))
     st.html(parts.goal_card(user["lessons_today"], user["daily_goal"], course.TOTAL_LESSONS - done, finish_line(user)))
     st.html(parts.week_card(week(user), user["best_streak"], user["streak"]))
