@@ -1,8 +1,8 @@
-# Qubi look: the theme (dark or light) and every drawing (shapes, mists, boxes, circuits).
+# Qubi look: the theme (dark or light) and every drawing (shapes, superpositions, gates, circuits).
 
 import base64
 import streamlit as st
-from engine.qubits import State
+from engine.qubits import State, SHAPES
 
 BLACK = "#18181B"
 WHITE = "#FFFFFF"
@@ -28,9 +28,12 @@ THEMES = {
               "good-body": "#166534", "bad": "#FDECEF", "bad-text": "#BE123C", "bad-body": "#9F1239"},
 }
 
+# Browsers skip an @import that comes after other rules, so load_style() puts this first.
+FONTS = ("@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700"
+         "&family=Space+Mono:wght@400;700&family=Doto:wght@900&display=swap');")
+
 CSS = """
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Doto:wght@900&display=swap');
-html, body, p, h1, h2, h3, a, button, input, label, li,
+html, body, p, h1, h2, h3, h4, a, button, input, label, li,
 span:not([data-testid="stIconMaterial"]) { font-family: 'Space Grotesk', sans-serif !important; }
 
 /* page */
@@ -80,7 +83,8 @@ a, a:hover { text-decoration: none !important; }
 
 /* buttons */
 .stButton button { border-radius: 14px; font-weight: 700; min-height: 44px; }
-[data-testid="stBaseButton-secondary"] { background: var(--card); color: var(--strong); border: 1.5px solid var(--edge); }
+[data-testid="stBaseButton-secondary"], [data-testid="stBaseLinkButton-secondary"] { background: var(--card); color: var(--strong); border: 1.5px solid var(--edge); border-radius: 14px; }
+[data-testid="stBaseLinkButton-secondary"] p { color: var(--strong); font-weight: 700; }
 [data-testid="stBaseButton-secondary"]:hover { border-color: #8B5CF6; color: var(--strong); }
 [data-testid="stBaseButton-secondary"]:disabled { background: var(--card); color: var(--muted); border-color: var(--line); }
 [data-testid="stBaseButton-primary"] { background: #7C3AED; color: #FFFFFF; border: none; box-shadow: 0 4px 0 #4C1D95; min-height: 50px; }
@@ -169,6 +173,9 @@ button[data-variant="segmented_control"] { background: var(--card); color: var(-
 button[data-variant="segmented_control"][aria-checked="true"] { background: rgba(139,92,246,0.16); color: var(--strong); border-color: #8B5CF6; }
 button[data-variant="segmented_control"] p { color: inherit; }
 [data-testid="stCode"] pre { background: #0E1119; border-radius: 14px; }
+[role="dialog"] { background: var(--card); color: var(--text); }
+[role="dialog"] h2, [role="dialog"] div:has(> h2) { color: var(--strong); }
+[role="dialog"] button[aria-label="Close"] { color: var(--muted); }
 [data-testid="stCode"] code { color: #C4C4CC; font-family: 'Space Mono', monospace !important; font-size: 13px; }
 """
 
@@ -176,7 +183,7 @@ button[data-variant="segmented_control"] p { color: inherit; }
 def load_style():
     """Fonts, colors and building blocks for the chosen theme. Called once in main.py."""
     colors = "".join(f"--{name}: {value}; " for name, value in THEMES[theme()].items())
-    st.html("<style>:root { " + colors + "} " + CSS + "</style>")
+    st.html("<style>" + FONTS + ":root { " + colors + "} " + CSS + "</style>")
 
 
 def theme():
@@ -188,7 +195,7 @@ def color(name):
     return THEMES[theme()][name]
 
 
-# ================= 2. shapes and mists =================
+# ================= 2. shapes and superpositions =================
 
 def draw_shape(shape, color, x, y, size=SIZE):
     """One qubit. color 0 = white, 1 = black."""
@@ -211,7 +218,7 @@ def draw_shape(shape, color, x, y, size=SIZE):
 
 
 def draw_cloud(width, height):
-    """Mist outline made of little loops, drawn clockwise around the edges."""
+    """The cloud around a superposition: little loops drawn clockwise around the edges."""
     left, top, right, bottom = 7, 7, width - 7, height - 7
     loops_across = max(round((right - left) / 15), 1)
     loops_down = max(round((bottom - top) / 15), 1)
@@ -231,16 +238,18 @@ def draw_cloud(width, height):
     return f'<path d="{path}Z" fill="none" stroke="{BLACK}" stroke-width="2"/>'
 
 
-def draw_state(state, size=SIZE):
-    """Draws a state: shapes, | bars, minus signs, and a cloud if it's a mist."""
-    mist = state.is_mist()
-    padding = 26 if mist else 2
+def draw_state(state, size=None):
+    """Draws a state: shapes, | bars, minus signs, and a cloud if it's a superposition.
+    Big superpositions get smaller shapes so they still fit."""
+    cloud = state.is_superposition()
+    padding = 26 if cloud else 2
     x = padding
     y = padding
     parts = []
 
-    entries = state.entries.items() if isinstance(state.entries, dict) else state.entries   # untidy mists are lists
-    for number, (colors, sign) in enumerate(sorted(entries)):
+    entries = sorted(state.entries.items()) if isinstance(state.entries, dict) else state.entries   # untidy: keep the order
+    size = size or (SIZE if len(entries) * len(state.shapes) <= 8 else 28)
+    for number, (colors, sign) in enumerate(entries):
         if number > 0:                                         # bar between entries
             x += GAP
             parts.append(f'<rect x="{x}" y="{y}" width="2" height="{size}" fill="{BLACK}"/>')
@@ -260,7 +269,7 @@ def draw_state(state, size=SIZE):
 
     width = x + padding
     height = size + padding * 2
-    if mist:
+    if cloud:
         parts.insert(0, draw_cloud(width, height))
     return f'<svg {SVG} width="{width}" height="{height}">{"".join(parts)}</svg>'
 
@@ -308,34 +317,47 @@ def draw_symbol(kind, x, y=31):
             f'font-weight="700" fill="{BLACK}">{kind}</text>')
 
 
-def draw_gate(name):
-    """A box with pegs, like the notes. Wider boxes take more shapes."""
-    if name == "MEASURE":
-        return (f'<svg {SVG} width="68" height="60">'
-                f'<polygon points="2,12 10,6 66,6 58,12" fill="#52525B" stroke="{BLACK}" stroke-width="1.2"/>'
-                f'<polygon points="58,12 66,6 66,44 58,50" fill="#27272A" stroke="{BLACK}" stroke-width="1.2"/>'
-                f'<rect x="2" y="12" width="56" height="38" fill="#3F3F46" stroke="{BLACK}" stroke-width="1.2"/>'
-                f'<path d="M17 37A13 13 0 0 1 43 37" fill="none" stroke="#F4F4F5" stroke-width="2"/>'
-                f'<path d="M30 37L37 27" stroke="#F4F4F5" stroke-width="2" stroke-linecap="round"/></svg>')
-
-    slots = SLOTS.get(name, [name])
-    width = 8 + 60 * len(slots)
+def draw_column(name, spots):
+    """One box drawn on its shapes' spots, a list of (x, y) points. The Circuit Lab stacks the spots
+    down a column and the lessons line them up across a row, but the box itself looks the same."""
+    if name == "MEASURE":                                        # a dark box with a meter on every spot
+        return "".join(f'<rect x="{x - 17}" y="{y - 17}" width="34" height="34" rx="7" fill="#3F3F46" stroke="{BLACK}"/>'
+                       f'<path d="M{x - 9} {y + 5}A9 9 0 0 1 {x + 9} {y + 5}" fill="none" stroke="#F4F4F5" stroke-width="2"/>'
+                       f'<path d="M{x} {y + 5}L{x + 5} {y - 3}" stroke="#F4F4F5" stroke-width="2" stroke-linecap="round"/>'
+                       for x, y in spots)
+    xs, ys = [x for x, _ in spots], [y for _, y in spots]
+    if name not in SLOTS:                                        # a game box like "?": one box over every spot
+        left, top, right, bottom = min(xs) - 22, min(ys) - 20, max(xs) + 22, max(ys) + 20
+        return (f'<rect x="{left}" y="{top}" width="{right - left}" height="{bottom - top}" rx="8" fill="#C4B5FD" stroke="#52525B"/>'
+                f'<text x="{(left + right) / 2}" y="{(top + bottom) / 2 + 6}" text-anchor="middle" font-family="sans-serif" '
+                f'font-size="17" font-weight="700" fill="{BLACK}">{name}</text>')
     parts = []
-    for i in range(len(slots)):                                 # pegs on top and bottom
-        x = 30 + 60 * i
-        parts.append(f'<rect x="{x - 4}" y="4" width="16" height="5" fill="#DCDCE1" stroke="#6B6B73"/>'
-                     f'<ellipse cx="{x + 4}" cy="4" rx="8" ry="2.4" fill="#F6F6F8" stroke="#6B6B73"/>'
-                     f'<rect x="{x - 8}" y="50" width="16" height="5" fill="#DCDCE1" stroke="#6B6B73"/>'
-                     f'<ellipse cx="{x}" cy="55" rx="8" ry="2.4" fill="#DCDCE1" stroke="#6B6B73"/>')
-    parts.append(f'<polygon points="2,12 10,6 {width - 2},6 {width - 10},12" fill="#F6F6F8" stroke="#6B6B73" stroke-width="1.2"/>'
-                 f'<polygon points="{width - 10},12 {width - 2},6 {width - 2},44 {width - 10},50" fill="#BBBBC2" stroke="#6B6B73" stroke-width="1.2"/>'
-                 f'<rect x="2" y="12" width="{width - 12}" height="38" fill="#E9E9EC" stroke="#6B6B73" stroke-width="1.2"/>')
-    if len(slots) > 1:                                          # line joining the pegs
-        color = BLACK if name == "SWAP" else TEAL
-        parts.append(f'<path d="M30 31H{30 + 60 * (len(slots) - 1)}" stroke="{color}" stroke-width="2"/>')
-    for i, kind in enumerate(slots):
-        parts.append(draw_symbol(kind, 30 + 60 * i))
-    return f'<svg {SVG} width="{width}" height="60">{"".join(parts)}</svg>'
+    if len(spots) > 1:                                           # the line joining control and target
+        parts.append(f'<path d="M{min(xs)} {min(ys)}L{max(xs)} {max(ys)}" stroke="{BLACK if name == "SWAP" else TEAL}" stroke-width="2"/>')
+    for kind, (x, y) in zip(SLOTS[name], spots):
+        if kind in ("H", "Z"):
+            parts.append(f'<rect x="{x - 20}" y="{y - 20}" width="40" height="40" rx="8" fill="#E9E9EC" stroke="#6B6B73"/>')
+        parts.append(draw_symbol(kind, x, y))
+    return "".join(parts)
+
+
+def draw_gate(item, shapes=None, small=False):
+    """A box in a lesson, drawn like the Circuit Lab but across a row, so each symbol sits right under
+    its shape in the picture above. item is "H", "CNOT", or a box and its shapes like "CNOT circle square".
+    shapes = every shape in the picture, so a box on only some of them lines up with the right ones.
+    small=True (pictures that run left to right) skips the lining up and keeps the gate compact."""
+    name, *on = item.split()
+    if not all(shape in SHAPES for shape in on):                 # a game box label with spaces in it
+        name, on = item, []
+    if name == "MEASURE" or name not in SLOTS:                   # every shape, unless it names some
+        on = on or shapes or ["one"]
+    elif not on:                                                 # a bare name: its shapes in order
+        on = shapes if shapes and len(shapes) == len(SLOTS[name]) else [str(i) for i in range(len(SLOTS[name]))]
+    row = shapes if shapes and not small and all(shape in shapes for shape in on) else on
+    step = SIZE + 6                                              # same spacing as shapes in a state
+    width = step * (len(row) - 1) + 50
+    spots = [(25 + step * row.index(shape), 25) for shape in on]
+    return f'<svg {SVG} width="{width}" height="50">{draw_column(name, spots)}</svg>'
 
 
 def draw_arrow(direction="down"):
@@ -349,41 +371,68 @@ def draw_arrow(direction="down"):
 
 # ================= 4. putting pictures on the page =================
 
-def as_image(svg):
-    """Turns an SVG drawing into an image (Streamlit blocks raw SVG)."""
+def as_image(svg, fit=False, alt=""):
+    """Turns an SVG drawing into an image (Streamlit blocks raw SVG). fit=True lets a big drawing shrink to fit.
+    alt describes the picture for screen readers (leave it empty for small decorations)."""
     encoded = base64.b64encode(svg.encode()).decode()
-    return f'<img src="data:image/svg+xml;base64,{encoded}">'
+    style = ' style="max-width:100%; height:auto"' if fit else ""
+    return f'<img src="data:image/svg+xml;base64,{encoded}" alt="{alt}"{style}>'
 
 
-def draw_chances(state):
-    """Every possible result of measuring, with its chance: 'white 50% or black 50%'."""
-    parts = []
-    for colors, chance in sorted(state.chances().items()):
-        plain = as_image(draw_state(State(state.shapes, {colors: 1})))
-        parts.append(f'<div class="stack" style="align-items:center; gap:6px">{plain}'
-                     f'<span style="font-family:Space Mono, monospace; font-size:13px; color:#3F3F46">{round(chance * 100)}%</span></div>')
+def draw_outcomes(results):
+    """The results of a measurement: what's left for each result and its chance, like 'white 50% or black 50%'.
+    results comes from State.outcomes()."""
+    parts = [f'<div class="stack" style="align-items:center; gap:6px">{as_image(draw_state(left), fit=True)}'
+             f'<span style="font-family:Space Mono, monospace; font-size:13px; color:#3F3F46">{round(chance * 100)}%</span></div>'
+             for _, chance, left in results]
     joiner = '<span style="color:#52525B; font-size:16px; padding-bottom:22px">or</span>'
     return f'<div class="row" style="gap:18px; flex-wrap:wrap; justify-content:center; align-items:flex-end">{joiner.join(parts)}</div>'
 
 
-def draw_item(item, small=False):
-    """One thing in a picture: a state, a box name, the chances after measuring, or the ANSWER slot."""
+def draw_item(item, small=False, shapes=None):
+    """One thing in a picture: a state, a gate, an = sign, a measurement's results, a circuit diagram,
+    or the dashed ANSWER slot."""
     if item == "ANSWER":
         width, height = (72, 52) if small else (120, 72)
         return (f'<span style="width:{width}px; height:{height}px; border-radius:14px; border:2.5px dashed #71717A; display:flex; '
                 f'align-items:center; justify-content:center; font-size:30px; font-weight:700; color:#71717A">?</span>')
-    if isinstance(item, dict):
-        return draw_chances(item["chances"])
+    if item in ("=", "≠"):
+        return f'<span style="font-size:34px; font-weight:700; color:{BLACK}; padding:0 4px">{item}</span>'
+    if isinstance(item, dict) and "outcomes" in item:
+        return draw_outcomes(item["outcomes"])
+    if isinstance(item, dict) and "circuit" in item:
+        return as_image(draw_circuit(*item["circuit"]), fit=True)
     if isinstance(item, str):
-        return as_image(draw_gate(item))
-    return as_image(draw_state(item))
+        return as_image(draw_gate(item, shapes, small))
+    return as_image(draw_state(item), fit=True)
+
+
+def draw_items(items, small=False):
+    """Draws a list of items. Each gate lines up under the shapes of the state before it."""
+    shapes, drawn = None, []
+    for item in items:
+        if isinstance(item, State):
+            shapes = item.shapes
+        drawn.append(draw_item(item, small, shapes))
+    return drawn
 
 
 def picture(items, note="", across=False, arrows=True):
     """A paper card with the items in order, joined by arrows. across=True lays them out left to right.
     arrows=False just shows the items side by side."""
     arrow = as_image(draw_arrow("right" if across else "down")) if arrows else ""
-    inside = arrow.join(draw_item(item, small=across) for item in items)
+    drawn = draw_items(items, small=across)
+    if not arrows and "=" in items:                              # keep each side of an = sign together
+        sides, side = [], []
+        for item, html in zip(items, drawn):
+            if item == "=":
+                sides += [side, [html]]
+                side = []
+            else:
+                side.append(html)
+        drawn = [f'<div class="row" style="gap:26px; justify-content:center; flex-wrap:wrap">{"".join(side)}</div>'
+                 for side in sides + [side]]
+    inside = arrow.join(drawn)
     direction = "row; flex-wrap:wrap; justify-content:center" if across or not arrows else "column"
     note = f'<span class="note">{note}</span>' if note else ""
     gap = "12px" if arrows else "26px"
@@ -391,7 +440,16 @@ def picture(items, note="", across=False, arrows=True):
             f'max-width:100%; overflow-x:auto">{inside}</div>{note}</div>')
 
 
-# ================= 5. circuits (for the Circuit Lab) =================
+def table_picture(rows, note=""):
+    """A rule table: one row per input, read left to right, like input → gate → output."""
+    arrow = as_image(draw_arrow("right"))
+    lines = "".join(f'<div class="row" style="gap:12px; justify-content:center; flex-wrap:wrap">'
+                    f'{arrow.join(draw_items(row, small=True))}</div>' for row in rows)
+    note = f'<span class="note">{note}</span>' if note else ""
+    return f'<div class="paper" style="gap:14px">{lines}{note}</div>'
+
+
+# ================= 5. circuits (for the Circuit Lab and lesson diagrams) =================
 
 def draw_circuit(shapes, starts, steps, upto=None):
     """Wires left to right with boxes on them. Steps after `upto` are faded."""
@@ -407,13 +465,7 @@ def draw_circuit(shapes, starts, steps, upto=None):
         x = 120 + 70 * k
         fade = ' opacity="0.3"' if upto is not None and k >= upto else ""
         group = [f'<text x="{x}" y="14" text-anchor="middle" font-family="monospace" font-size="12" fill="#71717A">{k + 1}</text>']
-        ys = [rows[shape] for shape in on]
-        if len(on) > 1:
-            group.append(f'<path d="M{x} {min(ys)}V{max(ys)}" stroke="{BLACK if name == "SWAP" else TEAL}" stroke-width="2"/>')
-        for kind, y in zip(SLOTS[name], ys):
-            if kind in ("H", "Z"):
-                group.append(f'<rect x="{x - 20}" y="{y - 20}" width="40" height="40" rx="8" fill="#E9E9EC" stroke="#6B6B73"/>')
-            group.append(draw_symbol(kind, x, y))
+        group.append(draw_column(name, [(x, rows[shape]) for shape in on]))
         parts.append(f'<g{fade}>{"".join(group)}</g>')
     return f'<svg {SVG} width="{width}" height="{height}">{"".join(parts)}</svg>'
 

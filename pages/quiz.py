@@ -7,7 +7,7 @@ import course
 from engine.qubits import State, apply
 from engine.ui import picture, words
 from engine.parts import bolt
-from engine.progress import add_xp, answered, finish_lesson, finish_test
+from engine.progress import add_xp, answered, finish_lesson, finish_test, new_badges
 from engine.widgets import top_bar, options, feedback, show_picture
 
 if "quiz" not in st.session_state:
@@ -24,7 +24,8 @@ if checked and checked["key"] != key:
     checked = None
 target = [(gate.split()[0], gate.split()[1:]) for gate in question.get("target", [])]   # circuit questions
 
-PEGS = {"NOT": 1, "H": 1, "Z": 1, "CNOT": 2, "CZ": 2, "SWAP": 2, "TOFFOLI": 3}
+ROLES = {"NOT": ["On"], "H": ["On"], "Z": ["On"], "CNOT": ["Control", "Target"], "CZ": ["Control", "Target"],
+         "SWAP": ["Swap", "With"], "TOFFOLI": ["Control", "Control", "Target"]}     # what each peg of a gate is for
 CHIPS = {"pick": ("PICK ONE", "#5B21B6", "#EDE9FE"), "state": ("BUILD THE STATE", "#5B21B6", "#EDE9FE"),
          "circuit": ("BUILD THE CIRCUIT", "#155E75", "#CFFAFE")}
 TIPS = {"pick": "Read every option before you pick.",
@@ -64,13 +65,14 @@ def next_question():
     right = sum(result["correct"] for result in quiz["results"])
     if quiz["kind"] == "lesson":
         finish_lesson(user, quiz["number"])
-        st.session_state.completed = {"lesson": quiz["number"], "xp": quiz["xp"] + course.LESSON_XP}
+        st.session_state.completed = {"lesson": quiz["number"], "xp": quiz["xp"] + course.LESSON_XP,
+                                      "badges": new_badges(user)}
         st.switch_page("pages/streak.py")
     unit = quiz["number"] if quiz["kind"] == "unit" else "final"
     percent = finish_test(user, unit, right, total)
     st.session_state.test_result = {"kind": quiz["kind"], "unit": unit, "title": quiz["title"], "right": right,
                                     "total": total, "percent": percent, "results": quiz["results"],
-                                    "seconds": round(time.time() - quiz["started"])}
+                                    "seconds": round(time.time() - quiz["started"]), "badges": new_badges(user)}
     st.switch_page("pages/results.py")
 
 
@@ -99,9 +101,10 @@ def state_builder():
         st.rerun()
 
     built = State(shapes, {colors: sign for colors, sign in entries.items() if sign != 0})
-    mist_note = "On: 2 or more entries make a mist." if built.is_mist() else "Turns on by itself when there are 2 or more entries."
+    cloud_note = ("On: 2 or more entries make a superposition." if built.is_superposition()
+                  else "Turns on by itself when you have 2 or more entries.")
     st.html(f'<div class="card" style="background:var(--well); padding:14px 16px; gap:2px">'
-            f'<span class="strong" style="font-weight:600">Put it in a mist</span><span class="small">{mist_note}</span></div>')
+            f'<span class="strong" style="font-weight:600">Superposition (the cloud)</span><span class="small">{cloud_note}</span></div>')
     st.html('<span class="label">PREVIEW</span>')
     if built.entries:
         st.html(picture([built]))
@@ -113,7 +116,7 @@ def state_builder():
 def circuit_builder():
     """Rows of boxes: which box, and which shapes it goes on. Returns the gates and whether they're all valid."""
     shapes = question["inputs"][0].shapes
-    allowed = [name for name in question["allowed"] if PEGS[name] <= len(shapes)]
+    allowed = [name for name in question["allowed"] if len(ROLES[name]) <= len(shapes)]
     chips = "".join(f'<span class="chip" style="height:34px; font-size:14px">{name}</span>' for name in allowed)
     st.html(f'<div class="row" style="gap:8px; flex-wrap:wrap"><span class="label">ALLOWED</span>{chips}</div>')
     ids = st.session_state.setdefault(f"{key}_gates", [])
@@ -122,8 +125,9 @@ def circuit_builder():
         with st.container(key=f"gate_row_{key}_{gate}", horizontal=True, vertical_alignment="center"):
             st.html(f'<span class="label" style="font-size:14px">{row}</span>', width="content")
             name = st.selectbox("Box", allowed, key=f"{key}_box_{gate}", label_visibility="collapsed")
-            on = [st.selectbox(f"Peg {peg + 1}", shapes, index=min(peg, len(shapes) - 1),
-                               key=f"{key}_on_{gate}_{peg}", label_visibility="collapsed") for peg in range(PEGS[name])]
+            on = [st.selectbox(f"{role} {peg + 1}", shapes, index=min(peg, len(shapes) - 1), key=f"{key}_on_{gate}_{name}_{peg}",
+                               format_func=lambda shape, role=role: f"{role}: {shape}", label_visibility="collapsed")
+                  for peg, role in enumerate(ROLES[name])]
             if st.button("", icon=":material/delete:", key=f"{key}_delete_{gate}", type="tertiary"):
                 ids.remove(gate)
                 st.rerun()

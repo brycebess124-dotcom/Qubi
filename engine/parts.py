@@ -25,6 +25,16 @@ LINE_ICONS = {
     "clock":  '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
     "x":      '<path d="M6 6l12 12M18 6L6 18"/>',
     "bulb":   '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3Z"/>',
+    "molecule": '<circle cx="6.5" cy="7" r="2.5"/><circle cx="17.5" cy="7" r="2.5"/><circle cx="12" cy="17" r="2.5"/>'
+                '<path d="M9 7h6M7.9 9.2l2.9 5.6M16.1 9.2l-2.9 5.6"/>',
+    "route":  '<circle cx="6" cy="18" r="2.2"/><circle cx="18" cy="6" r="2.2"/><path d="M8.2 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.8"/>',
+    "flame":  '<path d="M12 3c.6 2.8 3 4.3 4.5 6.7 1.5 2.4 1.7 5.1.3 7.2A5.6 5.6 0 0 1 12 19.8a5.6 5.6 0 0 1-4.8-2.9'
+              'c-1.3-2.4-.7-5.1.9-6.9.2 1.5.8 2.6 1.9 3.3-.4-3.6.4-7.3 2-10.3Z"/>',
+    "bolt":   '<path d="M13 3 5 13.5h6l-1 7.5 8-10.5h-6l1-7.5Z"/>',
+    "cnot":   '<circle cx="12" cy="12" r="7.5"/><path d="M12 4.5v15M4.5 12h15"/>',
+    "target": '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12h.01"/>',
+    "star":   '<path d="M12 3.6l2.5 5.2 5.7.8-4.1 4 1 5.6L12 16.5l-5.1 2.7 1-5.6-4.1-4 5.7-.8L12 3.6Z"/>',
+    "cap":    '<path d="M2.5 9.5 12 5l9.5 4.5L12 14 2.5 9.5Z"/><path d="M6.5 11.6V16c1.5 1.6 3.4 2.4 5.5 2.4s4-.8 5.5-2.4v-4.4M21.5 9.5v5"/>',
 }
 
 
@@ -48,14 +58,15 @@ def bolt(size=20):
                     f'<path fill="{CYAN}" d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12l1-8Z"/></svg>')
 
 
-def logo(width=98):
-    """The qubi logo: the q holds a target, the dot on the i is the control, and the wire joins them like a CNOT."""
-    return as_image(f'''<svg {SVG} width="{width}" height="{width * 108 / 166}" viewBox="-2 -42 166 108">
+def logo(width=108):
+    """The Qubi logo: the Q holds a target, the dot on the i is the control, and the wire joins them like a CNOT."""
+    return as_image(f'''<svg {SVG} width="{width}" height="{width * 92 / 186}" viewBox="-3 -42 186 92">
   <g fill="none" stroke="{color('strong')}" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="20" cy="20" r="16"/><path d="M36 4V60"/><path d="M56 4V20A16 16 0 0 0 88 20M88 4V36"/>
-    <path d="M106 -22V36"/><circle cx="122" cy="20" r="16"/><path d="M156 4V36"/></g>
-  <g fill="none" stroke="{PURPLE}" stroke-width="3.4" stroke-linecap="round"><path d="M10 20H30M20 31V-34H150"/></g>
-  <circle cx="156" cy="-34" r="6" fill="{PURPLE}"/><circle cx="20" cy="20" r="3.8" fill="{CYAN}"/>
+    <circle cx="31" cy="7" r="27"/><path d="M44 22L60 40"/>
+    <path d="M74 4V20A16 16 0 0 0 106 20M106 4V36"/>
+    <path d="M124 -22V36"/><circle cx="140" cy="20" r="16"/><path d="M174 4V36"/></g>
+  <g fill="none" stroke="{PURPLE}" stroke-width="3.4" stroke-linecap="round"><path d="M17 7H45M31 21V-34H168"/></g>
+  <circle cx="174" cy="-34" r="6" fill="{PURPLE}"/><circle cx="31" cy="7" r="4.5" fill="{CYAN}"/>
 </svg>''')
 
 
@@ -169,8 +180,8 @@ def robot_says(text):
 
 
 def final_test_card(status):
-    note = {"locked": "Covers all 6 units · unlocks after every unit test",
-            "now": "Covers all 6 units · ready when you are",
+    note = {"locked": f"Covers all {len(course.UNITS)} units · unlocks after every unit test",
+            "now": f"Covers all {len(course.UNITS)} units · ready when you are",
             "done": "Passed. You finished Qubi!"}[status]
     return f'''
     <div class="card" style="flex-direction:row; align-items:center; gap:16px; padding:16px 18px;
@@ -209,7 +220,7 @@ def progress_card(done, total, level, xp, xp_next):
     return f'''
     <div class="card" style="align-items:center; gap:18px">
         <div class="row" style="align-self:stretch; justify-content:space-between">
-            <span class="title">Course progress</span><span class="small">6 units</span>
+            <span class="title">Course progress</span><span class="small">{len(course.UNITS)} units</span>
         </div>
         <div style="position:relative; width:168px; height:168px">
             {ring(percent, 168, 14, PURPLE)}
@@ -290,7 +301,7 @@ def lab_card():
     <div class="card">
         <span class="title">Circuit Lab</span>
         <span class="small" style="line-height:1.45">
-            Build your own circuits from shapes and boxes and watch the mist change as you go.</span>
+            Build your own circuits from shapes and gates and watch the superposition change as you go.</span>
     </div>'''
 
 
@@ -302,4 +313,57 @@ def stat_card(picture, name, number, note):
         <span class="row small" style="gap:8px">{picture} {name}</span>
         <span class="big-number">{number}</span>
         <span class="small" style="font-size:13px">{note}</span>
+    </div>'''
+
+
+# ================= achievements (Progress page, and after lessons and tests) =================
+
+def badge(achievement, size=60):
+    """An achievement's tile: grey before you start, purple once you're on your way, cyan when every level is done."""
+    if achievement["done"]:
+        back, ink = CYAN, "#0B1220"
+    elif achievement["reached"] or achievement["have"]:
+        back, ink = "#7C3AED", "#FFFFFF"
+    else:
+        back, ink = "var(--locked)", GREY
+    return (f'<span class="node" style="width:{size}px; height:{size}px; border-radius:{round(size * 0.3)}px; '
+            f'background:{back}">{icon(achievement["icon"], ink, round(size * 0.5), 2)}</span>')
+
+
+def achievement_row(achievement):
+    """One achievement: its tile and level, name, progress like 4/7 with a bar, and what to do next."""
+    done = achievement["done"]
+    shade = CYAN if done else PURPLE
+    count = "Complete" if done else f'{achievement["have"]}/{achievement["goal"]}'
+    return f'''
+    <div class="row" style="gap:16px; padding:16px 0; border-bottom:1px dashed var(--line)">
+        <div class="stack" style="align-items:center; gap:7px; flex:none">
+            {badge(achievement)}
+            <span class="label" style="font-size:11px">LEVEL {achievement["level"]}</span>
+        </div>
+        <div class="stack" style="flex:1; gap:9px">
+            <div class="row" style="justify-content:space-between; gap:10px">
+                <span class="strong" style="font-weight:700; font-size:16px">{achievement["name"]}</span>
+                <span style="font-size:13px; font-weight:600; color:{CYAN if done else 'var(--muted)'}">{count}</span>
+            </div>
+            <div class="bar" style="height:10px"><div style="width:{achievement["have"] / achievement["goal"] * 100}%; background:{shade}"></div></div>
+            <span class="small">{achievement["text"]}</span>
+        </div>
+    </div>'''
+
+
+def unlocked_card(achievements):
+    """New achievement levels, shown after a lesson or a test. Each one's text is the goal just reached."""
+    rows = "".join(f'''
+        <div class="row" style="gap:14px">
+            {badge(achievement, 48)}
+            <div class="stack" style="gap:3px">
+                <span class="strong" style="font-weight:600; font-size:16px">{achievement["name"]} · Level {achievement["reached"]} done</span>
+                <span class="row small" style="gap:6px">{icon("check", CYAN, 16, 2.6)} {achievement["text"]}</span>
+            </div>
+        </div>''' for achievement in achievements)
+    title = "Achievement unlocked!" if len(achievements) == 1 else f"{len(achievements)} achievements unlocked!"
+    return f'''
+    <div class="card" style="gap:16px; border-color:rgba(34,211,238,0.45)">
+        <span class="title">{title}</span>{rows}
     </div>'''

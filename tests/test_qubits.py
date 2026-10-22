@@ -39,19 +39,28 @@ for kind, rules in machines.items():
         circle_color = {colors[0] for colors in result.entries}
         print(f"Game 1 {kind}:".ljust(15), circle_color == ({0} if kind == "rigged" else {1}))
 
-# ---------- game 2: the silent alarm ----------
-no_alarm = make("circle square", "ww").H("circle").H("circle")
-alarm = make("circle square", "ww").H("circle").CNOT("circle", "square").H("circle")
-print("Game 2 empty: ", no_alarm == make("circle square", "ww"))
-print("Game 2 alarm: ", alarm.chances()[(1, 0)] == 0.25)
+# ---------- the flip game: H, maybe NOT, H always gives white ----------
+flipped = white.copy().H("circle").NOT("circle").H("circle")
+left_alone = white.copy().H("circle").H("circle")
+print("Flip game:    ", flipped == white and left_alone == white)
 
-# ---------- game 3: find the gem ----------
+# ---------- measuring only some qubits ----------
+three = make("circle square", "ww", "wb", "bb")
+results = {seen: (round(chance, 2), state) for seen, chance, state in three.outcomes(["square"])}
+print("Measure some: ", results[(0,)] == (0.33, make("circle square", "ww"))
+      and results[(1,)] == (0.67, make("circle square", "wb", "bb")))
+
+# ---------- game 3: find the gem, in every locker ----------
 def flip_around(state):
     return (state.H("circle").H("square").NOT("circle").NOT("square").CZ("circle", "square")
                  .NOT("circle").NOT("square").H("circle").H("square"))
 
-gem = make("circle square", "ww").H("circle").H("square").CZ("circle", "square")    # gem in the black-black locker
-print("Game 3 gem:   ", flip_around(gem) == make("circle square", "bb"))
+markers = {"ww": lambda s: s.NOT("circle").NOT("square").CZ("circle", "square").NOT("circle").NOT("square"),
+           "wb": lambda s: s.NOT("circle").CZ("circle", "square").NOT("circle"),
+           "bw": lambda s: s.NOT("square").CZ("circle", "square").NOT("square"),
+           "bb": lambda s: s.CZ("circle", "square")}
+lockers = make("circle square", "ww").H("circle").H("square")
+print("Game 3 gem:   ", all(flip_around(mark(lockers.copy())) == make("circle square", code) for code, mark in markers.items()))
 
 # ---------- teleportation ----------
 message = make("circle", "w", "-b")
@@ -70,5 +79,7 @@ for circle in (0, 1):
 print("Teleport:     ", all_good)
 
 # ---------- export to IBM ----------
-code = to_qasm(["circle", "square"], [0, 0], [("H", ["circle"]), ("CNOT", ["circle", "square"])])
-print("QASM:         ", "cx q[0],q[1];" in code)
+code = to_qasm("Bell pair", ["circle", "square"], [1, 0], [("H", ["circle"]), ("CNOT", ["circle", "square"]),
+                                                          ("SWAP", ["circle", "square"])])
+print("QASM:         ", code.startswith("OPENQASM 2.0;") and "x q[0];" in code and "cx q[0],q[1];" in code
+      and "swap" not in code and "measure q[0] -> c[1];" in code)

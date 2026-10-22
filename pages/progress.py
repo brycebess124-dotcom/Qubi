@@ -1,10 +1,9 @@
-# Progress page: profile, stats, XP this week, and every unit.
+# Progress page: profile, stats, achievements, XP this week, and every unit.
 
-import datetime
 import streamlit as st
 import course
-from engine.parts import avatar, flame, bolt, icon, plural, ring, stat_card, PURPLE, CYAN, GREY
-from engine.progress import level
+from engine.parts import avatar, flame, bolt, icon, plural, ring, stat_card, achievement_row, PURPLE, CYAN, GREY
+from engine.progress import level, achievements, today
 
 user = st.session_state.user
 lessons_done = user["lessons_done"]
@@ -12,13 +11,20 @@ xp_next = level(user) * course.XP_PER_LEVEL
 accuracy = round(user["right"] / user["asked"] * 100) if user["asked"] else 0
 full_name = f'{user["name"]} {user["last_name"]}'.strip()
 
+
+def heading(text):
+    st.html(f'<span class="strong" style="font-size:22px; font-weight:700; display:block; padding-top:14px">{text}</span>')
+
+
 # ---------------- profile ----------------
 st.html(f'''
-<div class="row" style="gap:22px; flex-wrap:wrap; padding-bottom:10px">
+<div class="row" style="gap:22px; flex-wrap:wrap; padding-bottom:6px">
     <span style="box-shadow:0 0 0 5px rgba(139,92,246,0.25); border-radius:50%">{avatar(user["name"], 84)}</span>
-    <div class="stack" style="flex:1 1 260px; gap:6px">
+    <div class="stack" style="flex:1 1 260px; gap:4px">
         <span class="strong" style="font-size:34px; font-weight:700">{full_name}</span>
-        <span class="small" style="font-size:15px">Joined {user["joined"]} · Goal: {plural(user["daily_goal"], "lesson")} a day</span>
+        <span style="font-size:16px; color:var(--soft)">{user.get("username", "")}</span>
+        <span class="row small" style="gap:7px; font-size:15px; margin-top:4px">{icon("clock", GREY, 16, 2)}
+            Joined {user["joined"]} · Goal: {plural(user["daily_goal"], "lesson")} a day</span>
     </div>
     <div class="stack" style="gap:8px; min-width:240px">
         <div class="row" style="justify-content:space-between; font-size:14px">
@@ -30,6 +36,7 @@ st.html(f'''
 </div>''')
 
 # ---------------- four stats ----------------
+heading("Statistics")
 week_xp = sum(user["xp_week"])
 cards = [(flame(18), "Day streak", user["streak"], f'Best: {plural(user["best_streak"], "day")}'),
          (bolt(18), "Total XP", user["xp"], f"{week_xp} this week"),
@@ -39,20 +46,34 @@ cards = [(flame(18), "Day streak", user["streak"], f'Best: {plural(user["best_st
 for column, card in zip(st.columns(4), cards):
     column.html(stat_card(*card))
 
+# ---------------- achievements: each goal you reach moves one up a level ----------------
+badges = achievements(user)
+levels_done = sum(badge["reached"] for badge in badges)
+heading("Achievements")
+st.html(f'''
+<div class="card" style="gap:0; padding-top:6px; padding-bottom:4px">
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); column-gap:36px">
+        {"".join(achievement_row(badge) for badge in badges)}
+    </div>
+    <span class="small" style="padding:14px 0 10px">{levels_done} of {sum(len(badge["goals"]) for badge in badges)}
+        levels done. New ones show up after your lessons and tests.</span>
+</div>''')
+
 # ---------------- XP this week and the units ----------------
+st.html('<div style="height:8px"></div>')
 week_side, units_side = st.columns(2, gap="large")
 with week_side:
-    today = datetime.date.today().weekday()
+    today_number = today().weekday()
     biggest = max(max(user["xp_week"]), 1)
     bars = ""
     for day, (letter, xp) in enumerate(zip("MTWTFSS", user["xp_week"])):
-        shade = CYAN if day == today else PURPLE
+        shade = CYAN if day == today_number else PURPLE
         fill = f'<span style="width:100%; height:{xp / biggest * 100}%; border-radius:99px; background:{shade}"></span>' if xp else ""
         bars += (f'<div class="stack" style="align-items:center; gap:8px">'
                  f'<span style="width:100%; max-width:44px; height:240px; border-radius:99px; padding:4px; box-sizing:border-box;'
-                 f' border:1.5px solid {shade if day == today else "var(--edge)"}; display:flex; align-items:flex-end;'
+                 f' border:1.5px solid {shade if day == today_number else "var(--edge)"}; display:flex; align-items:flex-end;'
                  f' background:repeating-linear-gradient(135deg, var(--line) 0 2px, transparent 2px 10px)">{fill}</span>'
-                 f'<span style="font-size:13px; color:{CYAN if day == today else "var(--muted)"}">{letter}</span></div>')
+                 f'<span style="font-size:13px; color:{CYAN if day == today_number else "var(--muted)"}">{letter}</span></div>')
     st.html(f'''
     <div class="card" style="gap:20px">
         <div class="row" style="justify-content:space-between"><span class="title">XP this week</span>

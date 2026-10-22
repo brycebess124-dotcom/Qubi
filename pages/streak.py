@@ -1,7 +1,7 @@
-# Lesson complete: XP earned, the streak, and the week.
+# Lesson complete: XP earned, the streak, the week, and any new achievements.
 
 import streamlit as st
-from engine.parts import flame, bolt, plural, week_dots
+from engine.parts import flame, bolt, plural, week_dots, unlocked_card
 from engine.progress import week
 
 if "completed" not in st.session_state:
@@ -33,6 +33,8 @@ with st.container(key="celebrate", gap="medium"):
         <div style="height:1px; background:var(--line)"></div>
         <span style="text-align:center; color:var(--text); font-size:16px">{message}</span>
     </div>''')
+    if completed.get("badges"):
+        st.html(unlocked_card(completed["badges"]))
     if st.button("Continue", type="primary", width="stretch"):
         del st.session_state.completed
         st.switch_page("pages/home.py")

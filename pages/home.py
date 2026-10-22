@@ -36,7 +36,7 @@ with left:
     st.html(f'''
     <div class="stack" style="gap:6px">
         <span class="strong" style="font-size:30px; font-weight:700">{greeting}, {user["name"]}</span>
-        <span class="small" style="font-size:16px">Intro to Quantum Computing · 6 units · {course.TOTAL_LESSONS} lessons</span>
+        <span class="small" style="font-size:16px">Intro to Quantum Computing · {len(course.UNITS)} units · {course.TOTAL_LESSONS} lessons</span>
     </div>''')
 
     # ---------- the banner: what to do next ----------
@@ -57,7 +57,9 @@ with left:
         unlocks = "the final test" if number == len(course.UNITS) else "the next unit"
         headline, note, button = f"Unit {number} test is ready", f"Pass with {course.PASS_MARK}% to unlock {unlocks}.", "Start test"
     elif kind == "final":
-        headline, note, button = "The final test is ready", "One question from every lesson.", "Start final test"
+        questions = course.FINAL_PER_UNIT * len(course.UNITS)
+        headline, note, button = ("The final test is ready", f"{questions} questions from all {len(course.UNITS)} units.",
+                                  "Start final test")
     else:
         headline, note, button = "You finished Qubi!", "Every lesson, every test. Try the Circuit Lab anytime.", None
 

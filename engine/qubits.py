@@ -1,7 +1,7 @@
 # Qubi engine
 # A state is a set of entries. Each entry = colors + a sign.
 # colors: one number per shape. 0 = white, 1 = black.
-# 1 entry = plain shapes. 2+ entries = a mist (superposition).
+# 1 entry = plain shapes. 2+ entries = a superposition (drawn as a cloud).
 
 import math
 import random
@@ -18,7 +18,7 @@ class State:
     def copy(self):
         return State(self.shapes, self.entries)
 
-    def is_mist(self):
+    def is_superposition(self):
         return len(self.entries) > 1
 
     def spot(self, shape):
@@ -130,28 +130,34 @@ class State:
         total = sum(sign * sign for sign in self.entries.values())
         return {colors: sign * sign / total for colors, sign in self.entries.items()}
 
-    def measure(self, shapes=None):
-        """Measures some shapes (all if none given). Keeps only matching entries.
-        Returns what was seen, like {"circle": 1}."""
+    def outcomes(self, shapes=None):
+        """Every possible result of measuring these shapes (all if none given), as a list of
+        (colors seen, chance, the state that's left). Only the entries that match what was seen are kept."""
         shapes = shapes or self.shapes
         spots = [self.spot(shape) for shape in shapes]
-
-        def seen(colors):
-            return tuple(colors[p] for p in spots)
-
-        result_chances = {}
+        chances = {}
         for colors, chance in self.chances().items():
-            result_chances[seen(colors)] = result_chances.get(seen(colors), 0) + chance
-        result = random.choices(list(result_chances), list(result_chances.values()))[0]
+            seen = tuple(colors[p] for p in spots)
+            chances[seen] = chances.get(seen, 0) + chance
+        results = []
+        for seen, chance in sorted(chances.items()):
+            kept = {colors: sign for colors, sign in self.entries.items() if tuple(colors[p] for p in spots) == seen}
+            results.append((seen, chance, State(self.shapes, kept).tidy()))
+        return results
 
-        self.entries = {colors: sign for colors, sign in self.entries.items() if seen(colors) == result}
-        self.tidy()
-        return dict(zip(shapes, result))
+    def measure(self, shapes=None):
+        """Measures some shapes (all if none given) for real: picks one result at random, keeps only the
+        entries that match it, and returns what was seen, like {"circle": 1}."""
+        shapes = shapes or self.shapes
+        results = self.outcomes(shapes)
+        seen, _, left = random.choices(results, [chance for _, chance, _ in results])[0]
+        self.entries = left.entries
+        return dict(zip(shapes, seen))
 
     # ---------- entanglement ----------
 
     def is_entangled(self):
-        """True if some shape can't be pulled out into its own mist."""
+        """True if some shape can't be pulled out into its own cloud (the state can't be fully factored)."""
         for p in range(len(self.shapes)):
             pairs = {}
             for colors, sign in self.entries.items():
@@ -169,7 +175,7 @@ class State:
 def make(shapes, *entries):
     """make("circle", "w")              -> a white circle
        make("circle square", "wb")      -> white circle, black square
-       make("circle", "w", "-b")        -> a mist of white circle and minus black circle"""
+       make("circle", "w", "-b")        -> a superposition: white circle | minus black circle"""
     table = {}
     for entry in entries:
         sign = -1 if entry.startswith("-") else 1
@@ -179,7 +185,8 @@ def make(shapes, *entries):
 
 
 def untidy(shapes, *entries):
-    """A messy mist for pictures only: entries can repeat or cancel, like before tidying."""
+    """A messy superposition for pictures only: entries keep their order and can repeat or cancel,
+    like before tidying."""
     state = State(shapes.split(), {})
     state.entries = [(tuple(0 if letter == "w" else 1 for letter in entry.lstrip("-")),
                       -1 if entry.startswith("-") else 1) for entry in entries]
@@ -197,13 +204,14 @@ def apply(state, gate):
 
 
 def run(state, *gates):
-    """A picture of a circuit: start state, box, result, box, result...
-    Use "measure" as the last gate to show the chances."""
+    """A picture of a circuit: start state, gate, result, gate, result...
+    End with "measure" to show every result and its chance, or "measure square" to measure only some shapes."""
     items = [state]
     for gate in gates:
-        if gate == "measure":
-            items += ["MEASURE", {"chances": state}]
+        if isinstance(gate, str) and gate.split()[0] == "measure":
+            shapes = gate.split()[1:]
+            items += [" ".join(["MEASURE", *shapes]), {"outcomes": state.outcomes(shapes)}]
         else:
             state = apply(state, gate)
-            items += [gate[0] if isinstance(gate, tuple) else gate.split()[0], state]
+            items += [gate[0] if isinstance(gate, tuple) else gate, state]      # "CNOT circle square" labels the wires
     return items

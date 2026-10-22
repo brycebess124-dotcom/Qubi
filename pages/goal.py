@@ -1,10 +1,9 @@
 # Daily goal: step 2 of sign up, and opened again from Settings to change the pace.
 
-import datetime
 import streamlit as st
 import course
 from engine.parts import logo, plural, PURPLE, CYAN
-from engine.progress import lessons_date, finish_date, finish_line, short_date
+from engine.progress import lessons_date, finish_date, finish_line, short_date, today
 
 user = st.session_state.user
 from_sign_up = st.session_state.get("goal_from") == "sign up"
@@ -12,7 +11,7 @@ pace = st.session_state.setdefault("pace", user["daily_goal"])
 
 # ---------------- top ----------------
 with st.container(horizontal=True, vertical_alignment="center"):
-    st.html(logo(110))
+    st.html(logo(130))
     if from_sign_up:
         st.html('''<div class="row" style="justify-content:flex-end; gap:12px"><span class="label">STEP 2 OF 3</span>
             <div class="steps" style="width:100px"><span class="done"></span><span class="now"></span><span></span></div></div>''')
@@ -52,7 +51,7 @@ with left:
 # ---------------- your plan ----------------
 with right:
     lessons_left = course.TOTAL_LESSONS - user["lessons_done"]
-    days = (finish_date(user, pace) - datetime.date.today()).days          # the last day is for the final test
+    days = (finish_date(user, pace) - today()).days          # the last day is for the final test
     rows = ""
     lessons_so_far = 0
     for number, unit in enumerate(course.UNITS, start=1):
@@ -90,12 +89,10 @@ with right:
 # ---------------- bottom ----------------
 st.html('<div style="height:10px"></div>')
 with st.container(horizontal=True, horizontal_alignment="distribute"):
-    if st.button("Back", icon=":material/arrow_back:"):
+    if not from_sign_up and st.button("Back", icon=":material/arrow_back:"):
         st.session_state.pop("pace", None)
-        if from_sign_up:                                   # undo step 1 and go back to the sign up form
-            del st.session_state.user
-            st.switch_page("pages/account.py")
         st.switch_page("pages/settings.py")
+    st.space("stretch")
     if st.button("Continue" if from_sign_up else "Save", type="primary", icon=":material/arrow_forward:", icon_position="right"):
         user["daily_goal"] = pace
         user["reminder"] = reminder

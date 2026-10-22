@@ -3,7 +3,7 @@
 import streamlit as st
 import course
 from lessons import LESSONS
-from engine.parts import ring, icon, bolt, PURPLE, CYAN
+from engine.parts import ring, icon, bolt, unlocked_card, PURPLE, CYAN
 
 if "test_result" not in st.session_state:
     st.switch_page("pages/home.py")
@@ -36,7 +36,7 @@ with st.container(key="card_score", horizontal=True, vertical_alignment="center"
                      "PASSED · " + ("FINAL TEST" if unit == "final" else f"UNIT {unit} COMPLETE"))
         else:
             badge = ("rgba(244,63,94,0.14)", "var(--bad-text)", f"NOT YET · YOU NEED {course.PASS_MARK}%")
-        name = "All 6 units" if unit == "final" else course.UNITS[unit - 1]["title"]
+        name = f"All {len(course.UNITS)} units" if unit == "final" else course.UNITS[unit - 1]["title"]
         xp = f"+{course.TEST_XP} XP" if passed else "+0 XP"
         st.html(f'''
         <div class="stack" style="gap:16px">
@@ -82,7 +82,7 @@ with by_lesson:
     st.html(f'''
     <div class="card" style="gap:20px">
         <div class="row" style="justify-content:space-between"><span class="title">By lesson</span>
-            <span class="small">{"3 questions each" if unit != "final" else "1 question each"}</span></div>
+            <span class="small">{result["total"]} questions</span></div>
         <div style="display:grid; grid-template-columns:repeat({columns}, minmax(0, 1fr)); gap:14px; align-items:start">{bars}</div>
     </div>''')
 
@@ -114,10 +114,14 @@ with missed_side:
             first = next_unit["lessons"][0]
             title, note = f"Unit {unit + 1} · {next_unit['title']}", f"Next: Lesson {first}, {LESSONS[first - 1]['title']}"
         else:
-            title, note = "The final test", "One question from every lesson."
+            title = "The final test"
+            note = f"{course.FINAL_PER_UNIT * len(course.UNITS)} questions from all {len(course.UNITS)} units."
         st.html(f'''
         <div class="card" style="background:var(--banner); border-color:rgba(139,92,246,0.4); gap:4px">
             <span class="label" style="color:#C4B5FD">UNLOCKED</span>
             <span class="title">{title}</span>
             <span style="color:var(--banner-text); font-size:14px">{note}</span>
         </div>''')
+
+    if result.get("badges"):
+        st.html(unlocked_card(result["badges"]))

@@ -2,7 +2,7 @@
 
 import streamlit as st
 from engine.parts import steps_bar, icon
-from engine.ui import picture
+from engine.ui import picture, table_picture
 
 
 def top_bar(title, counter, done, total, chip):
@@ -53,10 +53,15 @@ def feedback(correct, title, text):
 
 
 def show_picture(spec, note=""):
-    """Draws a lesson or quiz picture: a list (with arrows) or together(...) (side by side)."""
+    """Draws a lesson or quiz picture: a list (joined by arrows), together(...) (side by side, no arrows),
+    a rule table, or a single circuit diagram."""
     if spec is None:
         return
-    if isinstance(spec, dict):
+    if isinstance(spec, dict) and "rows" in spec:
+        st.html(table_picture(spec["rows"], note))
+    elif isinstance(spec, dict) and "together" in spec:
         st.html(picture(spec["together"], note, arrows=False))
+    elif isinstance(spec, dict):
+        st.html(picture([spec], note))
     else:
         st.html(picture(spec, note))

@@ -1,9 +1,9 @@
-# Circuit Lab: build any circuit, step through the mist, measure it, and export it to IBM.
+# Circuit Lab: build any circuit, step through it, measure it, and export it to IBM.
 
 import collections
 import streamlit as st
 from engine.qubits import State, apply, SHAPES
-from engine.qasm import to_qasm
+from engine.qasm import to_qasm, ibm_label, COMPOSER
 from engine.ui import draw_state, draw_circuit, chances_bars, as_image, draw_colors
 from engine.parts import plural
 
@@ -13,7 +13,7 @@ MAX_SHAPES = 3
 
 lab = st.session_state.setdefault("lab", {"name": "Bell pair", "shapes": ["circle", "square"], "starts": [0, 0],
                                           "steps": [("H", ["circle"]), ("CNOT", ["circle", "square"])],
-                                          "show": None, "counts": None, "export": False})
+                                          "show": None, "counts": None})
 
 
 def state_after(count):
@@ -28,6 +28,44 @@ def changed():
     """The circuit changed, so old measurements no longer count."""
     lab["counts"] = None
     lab["show"] = None
+
+
+@st.dialog("Run it on a real IBM quantum computer", width="large", icon=":material/ios_share:")
+def export_to_ibm():
+    """A pop-up with four steps, the code to paste into IBM Quantum Composer, and how to read IBM's answer."""
+    code = to_qasm(lab["name"], lab["shapes"], lab["starts"], lab["steps"])
+    st.html('''<span class="small" style="line-height:1.5">IBM lets anyone run circuits on its quantum computers for free
+        (up to 10 minutes a month). No coding needed: you copy, paste and press Run.</span>''')
+    steps = ["<b>Copy the code</b> below (copy button in its top corner), or download it to keep.",
+             "<b>Open IBM Quantum Composer</b> and sign in. The first time, make a free account and pick the "
+             "free <b>Open Plan</b>.",
+             "In Composer, open <b>View → Panels → Code Editor</b>. Select everything in the editor, delete it, "
+             "and paste your code. Your circuit appears, drawn IBM's way.",
+             "Press <b>Run circuit</b>, pick any quantum computer, and press Run. When the job finishes, open it "
+             "from <b>Workloads</b> to see the results."]
+    st.html('<div class="stack" style="gap:12px">' + "".join(f'<div class="row" style="gap:12px; align-items:flex-start"><span class="node" style="width:26px; '
+                    f'height:26px; font-size:13px; background:#7C3AED; color:#FFFFFF">{number}</span>'
+                    f'<span style="color:var(--text); font-size:15px; line-height:1.5">{step}</span></div>'
+                    for number, step in enumerate(steps, start=1)) + "</div>")
+    with st.container(horizontal=True):
+        st.download_button("Download the code", code, file_name="qubi-circuit.qasm", icon=":material/download:",
+                           on_click="ignore")
+        st.link_button("Open IBM Quantum Composer", COMPOSER, icon=":material/open_in_new:")
+    st.code(code, language=None)
+
+    final = state_after(len(lab["steps"]))
+    rows = "".join(f'<div class="row" style="gap:14px; min-height:34px">'
+                   f'<span style="font-family:Space Mono, monospace; font-weight:700; color:var(--strong); width:44px">{ibm_label(colors)}</span>'
+                   f'<span class="paper" style="padding:5px 8px; border-radius:8px">{as_image(draw_colors(lab["shapes"], colors, 16))}</span>'
+                   f'<span class="small">Qubi says {round(chance * 100)}%</span></div>'
+                   for colors, chance in sorted(final.chances().items()) if chance > 0)
+    order = ", ".join(lab["shapes"])
+    st.html(f'''<div class="stack" style="gap:8px; padding-top:6px; border-top:1px solid var(--line)">
+        <span class="strong" style="font-weight:600; padding-top:10px">How to read IBM's answer</span>
+        <span class="small" style="line-height:1.5">IBM shows a bar for each result, labeled with 0s and 1s.
+        0 means white and 1 means black, in the same order as your shapes ({order}).
+        Real machines are a little noisy, so you'll also see small bars for results Qubi says can't happen.</span>
+        {rows}</div>''')
 
 
 # ---------------- title and tools ----------------
@@ -45,8 +83,7 @@ with st.container(horizontal=True, vertical_alignment="center"):
         changed()
         st.rerun()
     if st.button("Export to IBM", icon=":material/ios_share:"):
-        lab["export"] = not lab["export"]
-        st.rerun()
+        export_to_ibm()
     measure = st.button("Measure 100×", type="primary", icon=":material/play_arrow:")
 
 shown = len(lab["steps"]) if lab["show"] is None else lab["show"]
@@ -101,30 +138,21 @@ with build:
     st.html(f'<div class="paper" style="align-items:flex-start; overflow-x:auto">'
             f'{as_image(draw_circuit(lab["shapes"], lab["starts"], lab["steps"], upto=shown))}</div>')
     stops = ["Start"] + [f"Step {n}" for n in range(1, len(lab["steps"]) + 1)]
-    picked = st.segmented_control("Show the mist after", stops, default=stops[shown], required=True,
+    picked = st.segmented_control("Show the state after", stops, default=stops[shown], required=True,
                                   key=f"show_{len(lab['steps'])}")
     if stops.index(picked) != shown:
         lab["show"] = stops.index(picked)
         lab["counts"] = None
         st.rerun()
 
-    # export to IBM
-    if lab["export"]:
-        with st.container(key="card_export"):
-            st.html('''<div class="stack" style="gap:6px"><span class="title">Run it on real hardware</span>
-                <span class="small" style="line-height:1.5">Copy this code (the copy button is in the corner) and paste it
-                into the code editor in IBM Quantum Composer. Real machines are noisy, so expect results a little
-                off from the chances shown here.</span></div>''')
-            st.code(to_qasm(lab["shapes"], lab["starts"], lab["steps"]), language=None)
-
 # ================= right: the output =================
 with output:
     if state.is_entangled():
-        badge, note = "Entangled", "These shapes are linked: you can't split this mist into a separate mist for each shape."
-    elif state.is_mist():
-        badge, note = "Mist", "Measuring picks one of these entries at random."
+        badge, note = "Entangled", "These qubits are linked: this cloud can't be split into one cloud per qubit."
+    elif state.is_superposition():
+        badge, note = "Superposition", "Measuring picks one of these entries at random."
     else:
-        badge, note = "Plain shapes", "No mist: measuring always gives exactly this."
+        badge, note = "Plain shapes", "No superposition: measuring always gives exactly this."
     counts = ""
     if lab["counts"]:
         counts = "".join(f'<span class="row" style="gap:6px">{as_image(draw_colors(lab["shapes"], colors, 12))} {count}</span>'
