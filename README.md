@@ -15,7 +15,7 @@ pip install -r requirements.txt
 streamlit run main.py
 ```
 
-Qubi opens in your browser at http://localhost:8501.
+Qubi opens in your browser at https://qubi-quantum.streamlit.app/
 
 ## Check it
 
