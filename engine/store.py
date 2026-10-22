@@ -60,6 +60,11 @@ def save(email, user):
          headers={"Prefer": "resolution=merge-duplicates,return=minimal"})
 
 
+def delete(email):
+    """Removes this person's saved progress for good."""
+    _ask("DELETE", params={"email": f"eq.{email}"})
+
+
 # ================= the session =================
 
 def signed_in():
@@ -121,6 +126,19 @@ def start_as_guest():
     st.session_state.user = new_user("Guest", "", "")
     st.session_state.goal_from = "sign up"
     st.switch_page("pages/goal.py")
+
+
+def delete_account():
+    """Deletes the saved progress, then signs out. Returns False if the database couldn't be reached."""
+    user = st.session_state.user
+    if user.get("account"):
+        try:
+            delete(user["account"])
+        except Exception:
+            return False
+        user["account"] = None             # so sign_out() doesn't save it again
+    sign_out()
+    return True
 
 
 def sign_out():

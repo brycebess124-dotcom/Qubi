@@ -1,5 +1,3 @@
-# Qubi starts here: the theme, every page, who can see what, and the sidebar.
-
 from pathlib import Path
 import streamlit as st
 from engine.ui import load_style
@@ -23,8 +21,9 @@ streak = st.Page("pages/streak.py", title="Lesson complete", url_path="complete"
 lab = st.Page("pages/lab.py", title="Circuit Lab", icon=":material/memory:", url_path="lab")
 progress = st.Page("pages/progress.py", title="Progress", icon=":material/bar_chart:", url_path="progress")
 settings = st.Page("pages/settings.py", title="Settings", icon=":material/tune:", url_path="settings")
+privacy = st.Page("pages/privacy.py", title="Privacy policy", url_path="privacy")
 
-page = st.navigation([welcome, account, goal, home, lesson, quiz, results, streak, lab, progress, settings],
+page = st.navigation([welcome, account, goal, home, lesson, quiz, results, streak, lab, progress, settings, privacy],
                      position="hidden")
 
 # ---------------- accounts: load or save progress, then who can see what ----------------
@@ -32,7 +31,7 @@ if start():                                      # just signed in with Google fo
     st.session_state.goal_from = "sign up"
     st.switch_page(goal)
 logged_in = "user" in st.session_state
-if not logged_in and page not in [welcome, account]:
+if not logged_in and page not in [welcome, account, privacy]:     # the privacy policy is public
     st.switch_page(welcome)                      # log in first
 if logged_in and page in [welcome, account]:
     st.switch_page(home)                         # already logged in, so go straight to Learn
