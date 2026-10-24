@@ -96,6 +96,8 @@ def rulebook_button(key, stretch=False):
 def rulebook():
     """Every rule learned so far, grouped by unit. Each lesson you finish unlocks its rules."""
     done = st.session_state.user["lessons_done"]
+    if st.session_state.get("preview"):              # preview mode shows every rule
+        done = course.TOTAL_LESSONS
     total = 0
     for rules in RULES.values():
         total += len(rules)

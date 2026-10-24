@@ -52,6 +52,13 @@ with st.container(key="card_settings", gap="small"):
         user["reminder"] = st.toggle("Streak reminder", value=user["reminder"], label_visibility="collapsed")
     st.html('<div style="height:1px; background:var(--line); margin:6px 0"></div>')
 
+    # preview mode
+    with st.container(horizontal=True, vertical_alignment="center"):
+        setting("Preview mode", "Unlock every lesson, test and Rulebook rule to look around. Your finished lessons stay the same.")
+        st.session_state.preview = st.toggle("Preview mode", value=st.session_state.get("preview", False),
+                                             label_visibility="collapsed")
+    st.html('<div style="height:1px; background:var(--line); margin:6px 0"></div>')
+
     # credits
     setting("About and credits", "Qubi is built on the ideas in the Virginia Tech Quantum Information Science and "
                                  "Engineering Summer School notes by Sophia Economou, Edwin Barnes and Jamie Sikora, "

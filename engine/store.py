@@ -28,19 +28,26 @@ def database_ready():
 
 # ================= the database =================
 
-def _ask(method, **options):
-    """One request to the Supabase table. Raises an error if it fails."""
+def _ask(method, params=None, data=None, prefer=None):
+    """One request to the Supabase table. Raises an error if it fails.
+    params picks rows (like which email), data is what to save, prefer is an extra Supabase option."""
     database = settings("supabase")
-    headers = {"apikey": database["key"], "Content-Type": "application/json", **options.pop("headers", {})}
-    response = requests.request(method, database["url"].rstrip("/") + "/rest/v1/" + TABLE,
-                                headers=headers, timeout=10, **options)
+    headers = {"apikey": database["key"], "Content-Type": "application/json"}
+    if prefer:
+        headers["Prefer"] = prefer
+    address = database["url"].rstrip("/") + "/rest/v1/" + TABLE
+    response = requests.request(method, address, headers=headers, timeout=10, params=params, data=data)
     response.raise_for_status()
     return response
 
 
 def for_saving(user):
     """The progress as JSON text. JSON keys must be text, so test numbers like 1 become "1"."""
-    return json.dumps({**user, "tests": {str(unit): score for unit, score in user["tests"].items()}}, sort_keys=True)
+    copy = user.copy()
+    copy["tests"] = {}
+    for unit, score in user["tests"].items():
+        copy["tests"][str(unit)] = score
+    return json.dumps(copy, sort_keys=True)
 
 
 def load(email):
@@ -49,7 +56,12 @@ def load(email):
     if not rows:
         return None
     user = rows[0]["data"]
-    user["tests"] = {int(unit) if unit.isdigit() else unit: score for unit, score in user["tests"].items()}
+    tests = {}
+    for unit, score in user["tests"].items():          # "1" back to 1 (but "final" stays "final")
+        if unit.isdigit():
+            unit = int(unit)
+        tests[unit] = score
+    user["tests"] = tests
     return user
 
 
@@ -57,7 +69,7 @@ def save(email, user):
     """Saves the progress, adding a row the first time and replacing it after that."""
     _ask("POST", data=json.dumps({"email": email, "data": json.loads(for_saving(user)),
                                   "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}),
-         headers={"Prefer": "resolution=merge-duplicates,return=minimal"})
+         prefer="resolution=merge-duplicates,return=minimal")
 
 
 def delete(email):
@@ -126,6 +138,13 @@ def start_as_guest():
     st.session_state.user = new_user("Guest", "", "")
     st.session_state.goal_from = "sign up"
     st.switch_page("pages/goal.py")
+
+
+def start_preview():
+    """For judges and visitors: a guest with every lesson, test and rule unlocked. Nothing is saved."""
+    st.session_state.user = new_user("Guest", "", "")
+    st.session_state.preview = True
+    st.switch_page("pages/home.py")
 
 
 def delete_account():

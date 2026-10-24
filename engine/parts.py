@@ -152,6 +152,8 @@ def lesson_text(number, title, status):
     elif status == "now":
         label = f'<span style="color:{CYAN}">LESSON {number} · NOW</span>'
         note = f'<span class="small">{"Start here" if number == 1 else "Up next"}</span>'
+    elif status == "open":
+        label, note = f"LESSON {number}", '<span style="color:#A78BFA; font-size:14px">Preview · tap to open</span>'
     else:
         label, note = f"LESSON {number}", '<span class="small">Locked</span>'
     name_color = "var(--soft)" if status == "locked" else "var(--strong)"
@@ -165,6 +167,8 @@ def test_text(unit, last_lesson, status, score=None):
         title, note = f"Passed with {score}%", "Tap to retake"
     elif status == "now":
         title, note = "Ready to take", f"~10 min · pass with {course.PASS_MARK}%"
+    elif status == "open":
+        title, note = "Preview · tap to open", f"~10 min · pass with {course.PASS_MARK}%"
     else:
         title, note = f"Unlocks after Lesson {last_lesson}", f"~10 min · pass with {course.PASS_MARK}%"
     return (f'<div class="stack"><span class="label">UNIT {unit} TEST</span>'

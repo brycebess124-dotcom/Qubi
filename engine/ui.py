@@ -129,6 +129,9 @@ a, a:hover { text-decoration: none !important; }
     box-shadow: 0 6px 0 #0E7490, 0 0 0 9px var(--page), 0 0 0 15px rgba(34,211,238,0.35); }
 [class*="st-key-node_now"] button:hover { background: #67E8F9; color: #0B1220; }
 [class*="st-key-node_now"] button p { color: #0B1220; }
+[class*="st-key-node_open"] button { background: #8B5CF6; color: #FFFFFF; box-shadow: 0 6px 0 #5B21B6; }
+[class*="st-key-node_open"] button:hover { background: #A78BFA; color: #FFFFFF; }
+[class*="st-key-node_open"] button p { color: #FFFFFF; }
 [class*="st-key-node_lock"] button, [class*="st-key-node_lock"] button:disabled {
     background: var(--locked) !important; color: #7A8090 !important; box-shadow: 0 6px 0 var(--drop); opacity: 1; border: none !important; }
 [class*="st-key-node_lock_test"] button { border-radius: 24px; }

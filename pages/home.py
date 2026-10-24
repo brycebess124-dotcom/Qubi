@@ -22,6 +22,7 @@ def open_test(kind, unit=None):
 
 user = st.session_state.user
 done = user["lessons_done"]
+preview = st.session_state.get("preview", False)         # preview mode: everything is open
 kind, number = next_step(user)
 if kind == "test":
     current_unit = number
@@ -46,6 +47,9 @@ with left:
         <span class="strong" style="font-size:30px; font-weight:700">{greeting}, {user["name"]}</span>
         <span class="small" style="font-size:16px">Intro to Quantum Computing · {len(course.UNITS)} units · {course.TOTAL_LESSONS} lessons</span>
     </div>''')
+    if preview:
+        st.html('<span class="chip" style="align-self:flex-start; color:#A78BFA">Preview mode · every lesson and test is '
+                'unlocked (turn it off in Settings)</span>')
 
     # ---------- the banner: what to do next ----------
     if kind == "lesson":
@@ -117,6 +121,8 @@ with left:
                 status, label, icon = "done", "", ":material/check:"
             elif kind == "lesson" and lesson == number:
                 status, label, icon = "now", str(lesson), None
+            elif preview:
+                status, label, icon = "open", str(lesson), None
             else:
                 status, label, icon = "lock", "", ":material/lock:"
             indent = 0.4 if status == "now" else [0.22, 0.34, 0.42, 0.34][i % 4]
@@ -134,6 +140,8 @@ with left:
             status, key = "done", f"node_testdone_{unit_number}"
         elif kind == "test" and number == unit_number:
             status, key = "now", f"node_test_{unit_number}"
+        elif preview:
+            status, key = "open", f"node_test_{unit_number}"
         else:
             status, key = "lock", f"node_lock_test_{unit_number}"
         space, row = st.columns([0.12, 0.88], vertical_alignment="center")
@@ -147,7 +155,7 @@ with left:
     # ---------- the final test ----------
     if "final" in user["tests"]:
         final_status = "done"
-    elif kind == "final":
+    elif kind == "final" or preview:
         final_status = "now"
     else:
         final_status = "locked"

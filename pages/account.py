@@ -2,7 +2,7 @@
 
 import streamlit as st
 from engine.parts import logo
-from engine.store import google_ready, start_as_guest
+from engine.store import google_ready, start_as_guest, start_preview
 
 left, middle, right = st.columns([1, 1.3, 1])
 with middle:
@@ -26,6 +26,8 @@ with middle:
             start_as_guest()
         st.html('<span class="small" style="font-size:13px">As a guest everything works, but your progress is gone '
                 'when you close the page.</span>')
+        if st.button("Judges: preview everything unlocked", icon=":material/lock_open:", width="stretch", type="tertiary"):
+            start_preview()
 
     if st.button("Back", icon=":material/arrow_back:", type="tertiary"):
         st.switch_page("pages/welcome.py")
